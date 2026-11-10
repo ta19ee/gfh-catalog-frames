@@ -115,9 +115,27 @@ async function fromStorefront() {
   return products;
 }
 
+// Newest "catalog" download from a cloud run (needs the GitHub CLI, logged in). Available as soon
+// as a run has fetched products, without waiting for the render.
+function fromArtifact() {
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  const list = JSON.parse(execFileSync('gh', ['api', `repos/${config.repo}/actions/artifacts?name=catalog&per_page=5`], { encoding: 'utf8' }));
+  const a = (list.artifacts || []).find((x) => !x.expired);
+  if (!a) throw new Error('no catalog download yet: run "gh workflow run catalog.yml" and try again in a minute');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gfh-catalog-'));
+  execFileSync('gh', ['run', 'download', String(a.workflow_run.id), '-R', config.repo, '-n', 'catalog', '-D', dir], { stdio: 'pipe' });
+  return JSON.parse(fs.readFileSync(path.join(dir, 'products.json'), 'utf8'));
+}
+
 async function fromSite() {
   const base = config.siteUrl;
-  const products = await getJson(`${base}/data/products.json`);
+  let products;
+  try {
+    products = await getJson(`${base}/data/products.json`, {}, 2);
+  } catch (e) {
+    products = fromArtifact(); // site not published yet (first render still running)
+  }
   try {
     const hist = await getJson(`${base}/price-history.json`, {}, 2);
     fs.mkdirSync(path.join(ROOT, 'public'), { recursive: true });

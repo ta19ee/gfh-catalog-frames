@@ -56,6 +56,13 @@ jobs:
         env:
           SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
 
+      # Available straight away for the local Studio (npm run pull), before the render finishes.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catalog
+          path: data/products.json
+          retention-days: 7
+
       - name: Render frames
         run: node src/render.js
         env:

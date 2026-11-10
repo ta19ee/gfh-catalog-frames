@@ -36,15 +36,31 @@ function activeTheme(today = new Date().toISOString().slice(0, 10)) {
 }
 
 const photoUrl = (src) => src + (src.includes('?') ? '&' : '?') + 'width=900';
-const facts = (p) => ({ type: p.type, vendor: p.vendor, title: p.title, tags: p.tags || [], createdAt: p.createdAt, collections: p.collections || [], category: p.category || '', food: isFood(p.type) });
+const facts = (p) => ({ type: p.type, vendor: p.vendor, title: p.title, tags: p.tags || [], createdAt: p.createdAt, collections: p.collections || [], category: p.category || '', food: isFood(p.type),
+  onSale: (p.variants || []).some((v) => Number(v.compareAt) > Number(v.price)) });
 
 // The design a product gets: a matching segment in config.segments, else the live theme.
 const themeFor = (active, p) => Tokens.segmentTheme(config.segments, active, facts(p));
 const labelFor = (t, p) => Tokens.resolve(t, facts(p));
 
-function frameOptions(t, p, price) {
+// Layer images live in assets/layers/ and are embedded so the cloud render needs no extra requests.
+const assetCache = new Map();
+function assetSrc(src) {
+  if (!src || !/^assets\/layers\/[\w.-]+$/.test(src)) return src;
+  if (!assetCache.has(src)) {
+    const file = path.join(ROOT, src);
+    const ext = path.extname(file).slice(1).toLowerCase();
+    const type = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+    assetCache.set(src, fs.existsSync(file) ? `data:${type};base64,${fs.readFileSync(file).toString('base64')}` : '');
+  }
+  return assetCache.get(src);
+}
+
+function frameOptions(t, p, price, fmt = '1x1') {
+  const f = facts(p);
   return {
     ...labelFor(t, p),
+    layers: Tokens.layersFor(t, { ...f, title: cleanTitle(p.title, config.maxTitleChars) }, price, fmt).map((l) => (l.kind === 'image' ? { ...l, src: assetSrc(l.src) } : l)),
     title: cleanTitle(p.title, config.maxTitleChars),
     sub: t.subText || '',
     photo: photoUrl(p.image),
@@ -63,7 +79,7 @@ function themeOf(themeName) {
 // price: { now, ref, pct } or null. fmt: '1x1' | '4x5' | '9x16' | '2x3'
 function pageHtml(themeName, p, fmt = '1x1', price = null) {
   const t = themeOf(themeName);
-  return Page.build(t, frameOptions(t, p, price), fmt);
+  return Page.build(t, frameOptions(t, p, price, fmt), fmt);
 }
 
 // Variants that would show the same image. Without a price block that is the whole product;

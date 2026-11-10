@@ -9,6 +9,22 @@
     '2x3': { w: 1000, h: 1500, label: '2:3 · 1000×1500', metaTag: '' },
   };
 
+  // Simple line icons (24x24, currentColor).
+  const ICONS = {
+    truck: '<path d="M3 6h11v9H3zM14 9h4l3 3v3h-7z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+    leaf: '<path d="M5 19C5 10 11 5 20 5c0 9-5 15-14 15"/><path d="M5 19 13 11"/>',
+    chili: '<path d="M14 5c2 0 3 1 3 3-1 7-7 11-13 11 4-2 6-6 7-10 0-2 1-4 3-4z"/><path d="M15 5c0-1 1-2 2-2"/>',
+    flame: '<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 2-7 1 1 2 2 3 4 0-3 0-5 0-7z"/>',
+    gift: '<path d="M4 10h16v10H4zM3 7h18v3H3zM12 7v13"/><path d="M12 7C10 3 7 4 8 6c1 1 4 1 4 1s3 0 4-1c1-2-2-3-4 1"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    tag: '<path d="M3 12 12 3h8v8l-9 9z"/><circle cx="16" cy="8" r="1.5"/>',
+    check: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+    snowflake: '<path d="M12 2v20M4 7l16 10M20 7 4 17"/>',
+    heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.5-7 10-7 10z"/>',
+    star: '<path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>',
+    bowl: '<path d="M3 11h18a9 9 0 0 1-18 0zM8 7c0-2 2-2 2-4M13 7c0-2 2-2 2-4"/>',
+  };
+
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   // "3.49" -> { whole: "3", cents: "49", text: "€3,49" } (NL/BE/DE format)
@@ -50,6 +66,9 @@ body{font-family:'Outfit',system-ui,sans-serif;position:relative;-webkit-font-sm
 .band{position:absolute;left:0;right:0;bottom:0;height:${L.band}px;display:flex;align-items:center;justify-content:center;gap:${px(28)};font-weight:800;font-size:${px(32)};z-index:4;white-space:nowrap}
 .band .sep{width:${px(3)};height:${px(40)};opacity:.8}
 .deco{position:absolute;z-index:1}
+.layer{position:absolute;display:flex;align-items:center;overflow:hidden;line-height:1.15;font-weight:700;word-break:break-word}
+.layer img{width:100%;height:100%;object-fit:contain}
+.layer svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .badge{position:absolute;left:${L.plateLeft}px;top:${L.plateTop}px;z-index:6;font-weight:800;font-size:${px(30)};letter-spacing:${px(2)};text-transform:uppercase;padding:${px(14)} ${px(28)};border-radius:${px(48)} 0 ${px(28)} 0;white-space:nowrap}
 .price{position:absolute;right:${L.plateLeft - Math.round(70 * L.s)}px;top:${L.plateTop + Math.round(40 * L.s)}px;z-index:7;display:flex;flex-direction:column;align-items:stretch;min-width:${px(240)};filter:drop-shadow(0 ${px(10)} ${px(20)} rgba(0,0,0,.25))}
 .price .pill{align-self:flex-start;font-weight:800;font-size:${px(36)};padding:${px(6)} ${px(18)};border-radius:${px(10)};margin-bottom:${px(-6)};margin-left:${px(24)};position:relative;z-index:2}
@@ -86,7 +105,28 @@ ${price}
 <div class="title">${esc(o.title)}</div>
 ${o.sub ? `<div class="sub">${esc(o.sub)}</div>` : ''}
 <div class="band">${band}</div>
+${layersHtml(o.layers || [], L)}
 </body></html>`;
+  }
+
+  function layersHtml(layers, L) {
+    return layers.map((l, i) => {
+      const size = Math.round((Number(l.size) || 36) * L.s);
+      const just = l.align === 'left' ? 'flex-start' : l.align === 'right' ? 'flex-end' : 'center';
+      const style = [
+        `left:${Number(l.x) || 0}%`, `top:${Number(l.y) || 0}%`, `width:${Number(l.w) || 20}%`, `height:${Number(l.h) || 8}%`,
+        `z-index:${10 + i}`, `font-size:${size}px`, `font-weight:${l.weight || 700}`, `color:${l.color || '#111'}`,
+        l.bg ? `background:${l.bg}` : '', `border-radius:${Math.round((Number(l.radius) || 0) * L.s)}px`,
+        `justify-content:${just}`, `text-align:${l.align || 'center'}`, l.rotate ? `transform:rotate(${l.rotate}deg)` : '',
+        l.opacity != null && l.opacity !== '' ? `opacity:${l.opacity}` : '', l.kind === 'text' || l.kind === 'box' ? `padding:0 ${Math.round(12 * L.s)}px` : '',
+        l.upper ? 'text-transform:uppercase' : '',
+      ].filter(Boolean).join(';');
+      let inner = '';
+      if (l.kind === 'image' && l.src) inner = `<img src="${esc(l.src)}" alt="">`;
+      else if (l.kind === 'icon') inner = `<svg viewBox="0 0 24 24">${ICONS[l.icon] || ICONS.check}</svg>`;
+      else inner = esc(l.text || '');
+      return `<div class="layer layer-${esc(l.kind || 'text')}" data-layer="${l.index != null ? l.index : i}" style="${style}">${inner}</div>`;
+    }).join('');
   }
 
   // Decorations are drawn for 1080x1080; stretch their positions to the format.
@@ -95,7 +135,7 @@ ${o.sub ? `<div class="sub">${esc(o.sub)}</div>` : ''}
     return html.replace(/left:(\d+)px;top:(\d+)px/g, (m, x, y) => `left:${Math.round(x * L.w / 1080)}px;top:${Math.round(y * L.h / 1080)}px`);
   }
 
-  const api = { FORMATS, build, esc, money, layout };
+  const api = { FORMATS, ICONS: Object.keys(ICONS), build, esc, money, layout };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GFHPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -103,8 +103,8 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
 
 <dialog id="segDlg">
   <h3 style="margin-top:0">Designs per product segment</h3>
-  <p class="hint">Give categories of products their own design, like Confect's design per category. The first matching row wins; other products use the live theme. "During" limits a row to the time when that theme is live (blank = always). Saving writes <code>config.json</code> (local) or opens a pull request (hosted).</p>
-  <table class="sched"><thead><tr><th align="left">Products where</th><th align="left">Value</th><th align="left">Use design</th><th align="left">During</th><th align="left">Matches</th><th></th></tr></thead><tbody id="segRows"></tbody></table>
+  <p class="hint">Give categories of products their own design, like Confect's design per category. The first matching row wins; other products use the live theme. "During" limits a row to the time when that theme is live, and dates limit it to a period, like a schedule per rule (blank = always). Saving writes <code>config.json</code> (local) or opens a pull request (hosted).</p>
+  <table class="sched"><thead><tr><th align="left">Products where</th><th align="left">Value</th><th align="left">Use design</th><th align="left">During</th><th align="left">Dates (optional)</th><th align="left">Matches</th><th></th></tr></thead><tbody id="segRows"></tbody></table>
   <p><button id="addSeg" class="mini">+ Add segment</button></p>
   <p style="display:flex;gap:8px;justify-content:flex-end"><button id="segCancel">Cancel</button><button id="segSave" class="primary">Save segments</button></p>
 </dialog>

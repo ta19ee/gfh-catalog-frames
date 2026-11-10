@@ -9,6 +9,12 @@ fs.mkdirSync(path.join(OUT, 'lib'), { recursive: true });
 for (const f of ['index.html', 'studio.js', 'backend.js']) fs.copyFileSync(path.join(data.ROOT, 'studio', f), path.join(OUT, f));
 for (const f of ['_tokens.js', '_page.js']) fs.copyFileSync(path.join(data.THEME_DIR, f), path.join(OUT, 'lib', f));
 fs.copyFileSync(path.join(data.ROOT, 'assets', 'gfh-logo.png'), path.join(OUT, 'logo.png'));
+// Layer images, so the hosted Studio previews them too.
+const LAYERS = path.join(data.ROOT, 'assets', 'layers');
+if (fs.existsSync(LAYERS)) {
+  fs.mkdirSync(path.join(OUT, 'assets', 'layers'), { recursive: true });
+  for (const f of fs.readdirSync(LAYERS)) fs.copyFileSync(path.join(LAYERS, f), path.join(OUT, 'assets', 'layers', f));
+}
 const state = data.state({ inStockOnly: true });
 // The full catalog (public storefront data) so the local Studio can download it: npm run pull
 fs.mkdirSync(path.join(data.ROOT, 'public', 'data'), { recursive: true });

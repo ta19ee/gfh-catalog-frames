@@ -2,7 +2,7 @@
 // using the same _tokens.js / _page.js as the nightly render.
 (() => {
   const $ = (s) => document.querySelector(s);
-  const state = { themes: {}, products: [], config: {}, name: '', tokens: null, saved: '', view: 'grid', fmt: '1x1', selected: null, show: 24 };
+  const state = { themes: {}, products: [], config: {}, name: '', tokens: null, saved: '', view: 'grid', fmt: '1x1', selected: null, show: 24, layerSel: null };
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
   // ---- editable fields -------------------------------------------------------------
@@ -14,6 +14,9 @@
       ['bandText', 'Bottom band', 'text', 'Use | to split into parts, e.g. "Free delivery over €29 | Thousands of Indian & Asian groceries"'],
       ['sub.text', 'Sub-line', 'text', 'Optional line under the title, e.g. "Indian | Thai | Chinese | Korean | Japanese"'],
       ['sub.color', 'Sub-line colour', 'color'],
+    ]],
+    ['Layers', [
+      ['layers', '', 'layers'],
     ]],
     ['Price', [
       ['price.show', 'Show price', 'check'],
@@ -34,6 +37,9 @@
       ['background.type', 'Type', 'select', ['linear', 'radial']],
       ['background.angle', 'Angle', 'range', [0, 360, 5]],
       ['background.colors', 'Colours', 'colors'],
+      ['background.pattern', 'Pattern', 'select', GFHTokens.PATTERNS],
+      ['background.patternColor', 'Pattern colour', 'color'],
+      ['background.patternSize', 'Pattern size', 'range', [10, 120, 2]],
     ]],
     ['Tag', [
       ['tag.bg', 'Fill', 'color'],
@@ -106,7 +112,7 @@
     const t = state.tokens;
     FIELDS.forEach(([title, fields], i) => {
       const d = document.createElement('details');
-      d.open = i < 2;
+      d.open = i < 2 || title === 'Layers';
       d.innerHTML = `<summary>${title}</summary>` + (title === 'Price' ? "<p class=\"hint\" style=\"margin:4px 0\">The price comes from Shopify and is re-rendered when it changes. The -% pill, was-price and label need a real reduction. Was-price from “history” (safest) uses our own 30-day price history (EU rule); “shopify” uses the Shopify compare-at price until our history covers 30 days. Tick \"Sample reduction\" above the preview to check the design.</p>" : '');
       for (const [p, label, kind, extra] of fields) {
         const row = document.createElement('div');
@@ -140,6 +146,12 @@
           el.append(r, n);
         } else if (kind === 'color') {
           el = colorInput(val, (v) => update(p, v));
+        } else if (kind === 'layers') {
+          row.style.display = 'block';
+          row.innerHTML = '';
+          el = document.createElement('div');
+          el.id = 'layersBox';
+          setTimeout(() => layersControl(el));
         } else if (kind === 'rules') {
           row.style.display = 'block';
           row.innerHTML = '<p class="hint" style="margin:0 0 8px">Badges and tag text driven by real Shopify data. The first matching rule of each kind wins. Example: tag "vegan" → badge "Vegan"; created within 30 days → badge "New"; vendor "Haldiram" → tag "Haldiram favourites".</p>';
@@ -192,6 +204,194 @@
     });
   }
 
+  // ---- layers -------------------------------------------------------------------------
+  // Element library (like Confect's): ready-made layers that follow the house rules.
+  const LIBRARY = {
+    'Brand name': () => [{ kind: 'text', text: '{vendor}', x: 16, y: 5, w: 40, h: 6, size: 30, weight: 800, color: '#142C73', align: 'left' }],
+    'Category': () => [{ kind: 'text', text: '{type}', x: 16, y: 10, w: 40, h: 5, size: 24, weight: 600, color: '#555555', align: 'left' }],
+    'Shop now button': () => [{ kind: 'text', text: 'Shop now', x: 36, y: 70, w: 28, h: 7, size: 30, weight: 800, color: '#FFFFFF', bg: '#142C73', radius: 40 }],
+    'Free delivery badge': () => [{ kind: 'icon', icon: 'truck', x: 6, y: 72, w: 6, h: 6, color: '#142C73' }, { kind: 'text', text: state.config.freeDeliveryText, x: 12, y: 72, w: 36, h: 6, size: 26, weight: 700, color: '#142C73', align: 'left' }],
+    'New ribbon (30 days)': () => [{ kind: 'text', text: 'New', x: 74, y: 16, w: 14, h: 6, size: 30, weight: 800, color: '#FFFFFF', bg: '#E8352B', radius: 12, rotate: -8, upper: true, when: { field: 'newDays', value: '30' } }],
+    'Vegan icon (tag vegan)': () => [{ kind: 'icon', icon: 'leaf', x: 80, y: 62, w: 7, h: 7, color: '#2E7D32', when: { field: 'tag', value: 'vegan' } }, { kind: 'text', text: 'Vegan', x: 74, y: 69, w: 19, h: 5, size: 24, color: '#2E7D32', when: { field: 'tag', value: 'vegan' } }],
+    'Spicy icon (tag spicy)': () => [{ kind: 'icon', icon: 'chili', x: 80, y: 62, w: 7, h: 7, color: '#C62828', when: { field: 'tag', value: 'spicy' } }],
+    'Discount splash (verified only)': () => [{ kind: 'text', text: '-{pct}%', x: 70, y: 14, w: 16, h: 13, size: 44, weight: 800, color: '#FFFFFF', bg: '#E30613', radius: 999, rotate: -10 }],
+    'Was-price line (verified only)': () => [{ kind: 'text', text: 'Was {was} · now {price}', x: 20, y: 66, w: 60, h: 5, size: 28, weight: 700, color: '#142C73' }],
+    'Gift icon': () => [{ kind: 'icon', icon: 'gift', x: 84, y: 76, w: 8, h: 8, color: '#B3262E' }],
+    'Assortment line': () => [{ kind: 'text', text: 'Thousands of Indian & Asian groceries', x: 10, y: 3, w: 80, h: 4, size: 22, weight: 600, color: '#FFFFFF' }],
+  };
+  const NEW_LAYER = {
+    text: () => ({ kind: 'text', text: 'Your text', x: 30, y: 40, w: 40, h: 8, size: 36, weight: 700, color: '#142C73' }),
+    box: () => ({ kind: 'box', text: '', x: 30, y: 40, w: 40, h: 10, color: '#FFFFFF', bg: '#142C73', radius: 24 }),
+    image: () => ({ kind: 'image', src: '', x: 70, y: 60, w: 20, h: 20 }),
+    icon: () => ({ kind: 'icon', icon: 'star', x: 80, y: 60, w: 8, h: 8, color: '#E8352B' }),
+  };
+  const fmtKey = () => (state.fmt === 'all' ? '1x1' : state.fmt);
+  // Geometry for the format being viewed: 1:1 is the base, other sizes can override it.
+  const geom = (L) => ({ x: L.x, y: L.y, w: L.w, h: L.h, ...((fmtKey() !== '1x1' && L.formats && L.formats[fmtKey()]) || {}) });
+  function setGeom(layers, i, g) {
+    const L = layers[i];
+    if (fmtKey() === '1x1') Object.assign(L, g);
+    else { L.formats = L.formats || {}; L.formats[fmtKey()] = { ...geom(L), ...g }; }
+  }
+  const round = (n) => Math.round(n * 10) / 10;
+
+  function layersControl(box) {
+    const layers = (state.tokens.layers || []).map((l) => clone(l));
+    const commit = () => update('layers', layers.map((l) => clone(l)));
+    box.innerHTML = '';
+    const head = document.createElement('div');
+    head.innerHTML = `<p class="hint" style="margin:0 0 6px">Free layers on top of the frame. Drag them in the Single view to move or resize. Positions are per size: 1:1 is the base; other sizes can be adjusted on their own. Text can use {title} {vendor} {type} {category} {price}; {was} and {pct} only show with a real reduction.</p>
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="mini" data-add="text">+ Text</button><button class="mini" data-add="box">+ Box</button><button class="mini" data-add="image">+ Image</button><button class="mini" data-add="icon">+ Icon</button>
+<select class="mini" id="libSel"><option value="">+ From library…</option>${Object.keys(LIBRARY).map((k) => `<option>${k}</option>`).join('')}</select></div>`;
+    box.append(head);
+    head.querySelectorAll('[data-add]').forEach((b) => (b.onclick = () => { layers.push(NEW_LAYER[b.dataset.add]()); state.layerSel = layers.length - 1; commit(); layersControl(box); }));
+    head.querySelector('#libSel').onchange = (e) => { if (!e.target.value) return; layers.push(...LIBRARY[e.target.value]()); state.layerSel = layers.length - 1; commit(); layersControl(box); };
+
+    layers.forEach((L, i) => {
+      const row = document.createElement('div');
+      row.style.cssText = `display:flex;gap:4px;align-items:center;padding:4px 6px;border:1px solid ${state.layerSel === i ? 'var(--accent)' : 'var(--line)'};border-radius:8px;margin:4px 0;cursor:pointer`;
+      const name = L.kind === 'icon' ? `icon: ${L.icon}` : L.kind === 'image' ? `image: ${(L.src || 'none').split('/').pop()}` : `${L.kind}: ${L.text || '(empty)'}`;
+      row.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${GFHPage.esc(name)}${L.when && L.when.field ? ' <span class="hint">(if ' + GFHPage.esc(L.when.field) + ')</span>' : ''}</span><button class="mini" data-a="up" title="Move back">↑</button><button class="mini" data-a="down" title="Move forward">↓</button><button class="mini" data-a="dup" title="Duplicate">⧉</button><button class="mini" data-a="del" title="Delete">×</button>`;
+      row.onclick = (e) => {
+        const a = e.target.dataset && e.target.dataset.a;
+        if (a === 'del') { layers.splice(i, 1); state.layerSel = null; }
+        else if (a === 'dup') { layers.splice(i + 1, 0, clone(L)); state.layerSel = i + 1; }
+        else if (a === 'up' && i > 0) { [layers[i - 1], layers[i]] = [layers[i], layers[i - 1]]; state.layerSel = i - 1; }
+        else if (a === 'down' && i < layers.length - 1) { [layers[i + 1], layers[i]] = [layers[i], layers[i + 1]]; state.layerSel = i + 1; }
+        else state.layerSel = state.layerSel === i ? null : i;
+        if (a) commit();
+        layersControl(box);
+        renderPreview();
+      };
+      box.append(row);
+      if (state.layerSel === i) box.append(layerEditor(L, i, layers, commit, box));
+    });
+  }
+
+  function layerEditor(L, i, layers, commit, box) {
+    const ed = document.createElement('div');
+    ed.style.cssText = 'border-left:3px solid var(--accent);padding:4px 0 4px 10px;margin:0 0 8px';
+    const g = geom(L);
+    const fields = [];
+    if (L.kind === 'text' || L.kind === 'box') fields.push(['text', 'Text', 'text']);
+    if (L.kind === 'icon') fields.push(['icon', 'Icon', 'select', GFHPage.ICONS]);
+    if (L.kind === 'image') fields.push(['src', 'Image', 'image']);
+    fields.push(['x', 'X %', 'num', g.x], ['y', 'Y %', 'num', g.y], ['w', 'Width %', 'num', g.w], ['h', 'Height %', 'num', g.h]);
+    if (L.kind !== 'image') fields.push(['color', 'Colour', 'color']);
+    if (L.kind !== 'icon' && L.kind !== 'image') fields.push(['bg', 'Fill', 'color'], ['size', 'Font size', 'num'], ['weight', 'Weight', 'select', ['600', '700', '800']], ['align', 'Align', 'select', ['center', 'left', 'right']], ['upper', 'UPPERCASE', 'check']);
+    fields.push(['radius', 'Corner radius', 'num'], ['rotate', 'Rotate °', 'num'], ['opacity', 'Opacity', 'num']);
+    for (const [k, label, kind, extra] of fields) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<label>${label}</label>`;
+      const geomKey = ['x', 'y', 'w', 'h'].includes(k);
+      const val = geomKey ? extra : L[k];
+      const set = (v) => { if (geomKey) setGeom(layers, i, { [k]: v }); else layers[i][k] = v; commit(); };
+      let el;
+      if (kind === 'text') { el = Object.assign(document.createElement('input'), { type: 'text', value: val || '' }); el.oninput = () => set(el.value); }
+      else if (kind === 'num') { el = Object.assign(document.createElement('input'), { type: 'text', value: val ?? '' }); el.inputMode = 'decimal'; el.oninput = () => set(el.value === '' ? '' : Number(el.value)); }
+      else if (kind === 'check') { el = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!val }); el.style.justifySelf = 'start'; el.onchange = () => set(el.checked); }
+      else if (kind === 'select') { el = document.createElement('select'); el.innerHTML = extra.map((o) => `<option ${String(o) === String(val) ? 'selected' : ''}>${o}</option>`).join(''); el.onchange = () => set(el.value); }
+      else if (kind === 'color') el = colorInput(val || '', set);
+      else if (kind === 'image') {
+        el = document.createElement('div');
+        el.style.display = 'grid';
+        el.style.gap = '4px';
+        const url = Object.assign(document.createElement('input'), { type: 'text', value: val || '', placeholder: 'assets/layers/… or https://…' });
+        url.oninput = () => set(url.value);
+        el.append(url);
+        if (StudioBackend.mode === 'local') {
+          const file = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml' });
+          file.onchange = async () => {
+            const f = file.files[0];
+            if (!f) return;
+            const data = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
+            const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: f.name, data }) });
+            const j = await res.json();
+            if (!res.ok) return status(j.error, 'err');
+            url.value = j.src;
+            set(j.src);
+            status(`Saved ${j.src}: commit it with the theme`, 'ok');
+          };
+          el.append(file);
+        }
+      }
+      row.append(el);
+      ed.append(row);
+    }
+    // show-when condition
+    const cond = document.createElement('div');
+    cond.className = 'row';
+    const w = L.when || {};
+    cond.innerHTML = `<label>Show only if</label><div style="display:flex;gap:4px"><select data-k="field" style="flex:1;min-width:0"><option value="">always</option>${Object.entries(GFHTokens.FIELDS).map(([k, l]) => `<option value="${k}" ${k === w.field ? 'selected' : ''}>${l}</option>`).join('')}</select><input data-k="value" type="text" style="width:80px" placeholder="value"></div>`;
+    cond.querySelector('[data-k=value]').value = w.value || '';
+    cond.querySelectorAll('[data-k]').forEach((el) => (el.oninput = el.onchange = () => {
+      const f = cond.querySelector('[data-k=field]').value;
+      layers[i].when = f ? { field: f, value: cond.querySelector('[data-k=value]').value } : undefined;
+      commit();
+    }));
+    ed.append(cond);
+    if (fmtKey() !== '1x1') {
+      const reset = Object.assign(document.createElement('button'), { className: 'mini', textContent: `Use 1:1 position for ${GFHPage.FORMATS[fmtKey()].label.split(' ')[0]}` });
+      reset.onclick = () => { if (layers[i].formats) delete layers[i].formats[fmtKey()]; commit(); layersControl(box); };
+      ed.append(reset);
+    } else ed.insertAdjacentHTML('beforeend', '<p class="hint" style="margin:4px 0">Editing the 1:1 position. Pick 4:5 or 9:16 above the preview to adjust those sizes separately.</p>');
+    return ed;
+  }
+
+  // Drag & resize layers on the large single-size preview.
+  function attachDrag(frameBox, fmt) {
+    const layers = state.tokens.layers || [];
+    if (!layers.length) return;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:absolute;inset:0;z-index:5';
+    frameBox.append(ov);
+    const p = state.products.find((x) => x.id === state.selected);
+    const compiled = GFHTokens.compile(state.tokens);
+    const visible = new Set(GFHTokens.layersFor(compiled, p || {}, priceFor(p, compiled), fmt).map((l) => l.index));
+    layers.forEach((L, i) => {
+      if (!visible.has(i)) return;
+      const g = geom(L);
+      const h = document.createElement('div');
+      h.title = 'Drag to move · corner to resize · click to edit';
+      h.style.cssText = `position:absolute;left:${g.x}%;top:${g.y}%;width:${g.w}%;height:${g.h}%;outline:${state.layerSel === i ? '2px solid #1F6FEB' : '1px dashed rgba(31,111,235,.7)'};cursor:move`;
+      const grip = document.createElement('div');
+      grip.style.cssText = 'position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:#1F6FEB;border-radius:3px;cursor:nwse-resize';
+      h.append(grip);
+      ov.append(h);
+      const start = (e, mode) => {
+        e.preventDefault();
+        e.stopPropagation();
+        state.layerSel = i;
+        const r = ov.getBoundingClientRect();
+        const sx = e.clientX, sy = e.clientY, g0 = geom(state.tokens.layers[i]);
+        const move = (ev) => {
+          const dx = ((ev.clientX - sx) / r.width) * 100, dy = ((ev.clientY - sy) / r.height) * 100;
+          const ng = mode === 'move' ? { x: round(Math.min(100 - g0.w, Math.max(0, g0.x + dx))), y: round(Math.min(100 - g0.h, Math.max(0, g0.y + dy))) } : { w: round(Math.max(2, g0.w + dx)), h: round(Math.max(2, g0.h + dy)) };
+          const all = state.tokens.layers.map((l) => clone(l));
+          setGeom(all, i, ng);
+          state.tokens.layers = all;
+          const cur = geom(all[i]);
+          Object.assign(h.style, { left: cur.x + '%', top: cur.y + '%', width: cur.w + '%', height: cur.h + '%' });
+        };
+        const up = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          update('layers', state.tokens.layers.map((l) => clone(l)));
+          refreshLayersPanel();
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      };
+      h.onpointerdown = (e) => start(e, 'move');
+      grip.onpointerdown = (e) => start(e, 'resize');
+    });
+  }
+  function refreshLayersPanel() {
+    const box = document.querySelector('#layersBox');
+    if (box) layersControl(box);
+  }
+
   // ---- preview -----------------------------------------------------------------------
   // Price shown in the preview: the real price (with a reduction only if our history proves it),
   // or, when "Sample reduction" is ticked, a made-up 20% reduction to check the design.
@@ -223,6 +423,7 @@
       logo: new URL('logo.png', location.href).href,
       bandText: compiled.bandText || state.config.freeDeliveryText,
       price: priceFor(p, compiled),
+      layers: GFHTokens.layersFor(compiled, p, priceFor(p, compiled), fmt).map((l) => (l.kind === 'image' && /^assets\//.test(l.src || '') ? { ...l, src: new URL(l.src, location.href).href } : l)),
     }, fmt);
   }
 
@@ -301,6 +502,7 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
         const F = GFHPage.FORMATS[f];
         const use = F.metaTag ? ' · Meta ' + F.metaTag : f === '1x1' ? ' · Meta image_link' : ' · not used by Meta';
         const card = frameEl(p, f, pageFor(p, compiled, f), F.label + use);
+        if (state.fmt !== 'all' && designFor(p, null).name === state.name) attachDrag(card.querySelector('.frame'), f);
         card.style.width = state.fmt === 'all' ? `${Math.round((340 * F.w) / F.h)}px` : `min(${f === '9x16' ? 420 : 560}px,100%)`;
         row.append(card);
       }
@@ -440,7 +642,7 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
     rows.innerHTML = '';
     const addRow = (s = { field: 'type', value: '', theme: names[0], during: '' }) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td><select data-k="field">${fields(s.field)}</select></td><td><input type="text" data-k="value" placeholder="e.g. Health & Beauty"></td><td><select data-k="theme">${opts(s.theme)}</select></td><td><select data-k="during">${opts(s.during, true)}</select></td><td class="hint" data-k="n"></td><td><button class="mini">×</button></td>`;
+      tr.innerHTML = `<td><select data-k="field">${fields(s.field)}</select></td><td><input type="text" data-k="value" placeholder="e.g. Health & Beauty"></td><td><select data-k="theme">${opts(s.theme)}</select></td><td><select data-k="during">${opts(s.during, true)}</select></td><td><input type="date" data-k="from" value="${s.from || ''}" title="From (optional)"><input type="date" data-k="to" value="${s.to || ''}" title="To (optional)"></td><td class="hint" data-k="n"></td><td><button class="mini">×</button></td>`;
       tr.querySelector('[data-k=value]').value = s.value || '';
       const count = () => {
         const r = { field: tr.querySelector('[data-k=field]').value, value: tr.querySelector('[data-k=value]').value };
@@ -458,7 +660,8 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
 
   async function saveSegments() {
     const segments = [...$('#segRows').children].map((tr) => Object.fromEntries([...tr.querySelectorAll('[data-k]')].filter((el) => el.tagName !== 'TD').map((el) => [el.dataset.k, el.value.trim()])));
-    if (segments.some((s) => !s.value)) return alert('Every segment needs a value.');
+    if (segments.some((s) => !s.value && s.field !== 'onSale' && s.field !== 'food')) return alert('Every segment needs a value.');
+    if (segments.some((s) => s.from && s.to && s.from > s.to)) return alert('A segment has its From date after its To date.');
     let msg;
     try { msg = await StudioBackend.saveSegments({ segments }); } catch (e) { return alert(e.message); }
     $('#segDlg').close();
@@ -485,6 +688,7 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
   function setFmt(f) {
     state.fmt = f;
     document.querySelectorAll('#fmtSeg button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
+    refreshLayersPanel();
     renderPreview();
   }
 

@@ -39,6 +39,7 @@ function readProducts({ inStockOnly = false, max = Infinity } = {}) {
       createdAt: p.createdAt || null,
       collections: p.collections || [],
       category: p.category || '',
+      onSale: p.variants.some((v) => Number(v.compareAt) > Number(v.price)),
       food: isFood(p.type),
       photo: p.image + (p.image.includes('?') ? '&' : '?') + 'width=900',
       inStock: p.variants.some((v) => v.available),

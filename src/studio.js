@@ -22,15 +22,16 @@ function saveTheme(name, tokens) {
   fs.writeFileSync(file, `${header}module.exports = ${JSON.stringify(tokens, null, 2)};\n`);
 }
 
-const FIELD_OK = ['type', 'collection', 'category', 'tag', 'vendor', 'title', 'newDays', 'food'];
+const FIELD_OK = ['onSale', 'type', 'collection', 'category', 'tag', 'vendor', 'title', 'newDays', 'food'];
 function saveSegments({ segments }) {
   const themes = readThemes();
   const clean = (segments || []).map((s) => {
     if (!FIELD_OK.includes(s.field)) throw new Error(`Unknown field ${s.field}`);
     if (!themes[s.theme]) throw new Error(`Unknown design ${s.theme}`);
     if (s.during && !themes[s.during]) throw new Error(`Unknown theme ${s.during}`);
-    if (!String(s.value || '').trim()) throw new Error('Every segment needs a value');
-    return { field: s.field, value: String(s.value).trim(), theme: s.theme, during: s.during || '' };
+    if (!String(s.value || '').trim() && !['onSale', 'food'].includes(s.field)) throw new Error('Every segment needs a value');
+    const date = (v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+    return { field: s.field, value: String(s.value || '').trim(), theme: s.theme, during: s.during || '', from: date(s.from), to: date(s.to) };
   });
   const cfg = readConfig();
   cfg.segments = clean;
@@ -61,7 +62,7 @@ async function renderExact(tokens, productId, fmt = '1x1', price = null) {
   const num = (v) => (v == null || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
   const pr = price ? { now: num(price.now), ref: num(price.ref), pct: num(price.pct) } : null;
   const t = frame.Tokens.compile(tokens);
-  const html = frame.Page.build(t, frame.frameOptions(t, p, pr), fmt);
+  const html = frame.Page.build(t, frame.frameOptions(t, p, pr, fmt), fmt);
   browserP = browserP || frame.launch();
   const out = path.join(ROOT, 'previews', 'studio-exact.jpg');
   fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -70,12 +71,13 @@ async function renderExact(tokens, productId, fmt = '1x1', price = null) {
   return fs.readFileSync(out);
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 // Everything in studio/ is served as is; lib/ and logo.png come from the shared modules and assets.
 function staticFile(pathname) {
   if (pathname === '/') pathname = '/index.html';
   if (pathname === '/logo.png') return path.join(ROOT, 'assets', 'gfh-logo.png');
   if (pathname === '/lib/_tokens.js' || pathname === '/lib/_page.js') return path.join(THEME_DIR, pathname.slice(5));
+  if (/^\/assets\/layers\/[\w.-]+$/.test(pathname)) { const f = path.join(ROOT, pathname); return fs.existsSync(f) ? f : null; }
   const dir = path.join(ROOT, 'studio');
   const file = path.resolve(dir, '.' + pathname);
   return file.startsWith(dir + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile() ? file : null;
@@ -108,6 +110,20 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'PUT' && m) { saveTheme(m[1], await body(req)); return send(res, 200, { ok: true }); }
     if (req.method === 'PUT' && url.pathname === '/api/schedule') { saveSchedule(await body(req)); return send(res, 200, { ok: true }); }
     if (req.method === 'PUT' && url.pathname === '/api/segments') { saveSegments(await body(req)); return send(res, 200, { ok: true }); }
+    if (req.method === 'POST' && url.pathname === '/api/upload') {
+      // { name, data: "data:image/png;base64,..." } -> assets/layers/<name>
+      const { name, data } = await body(req);
+      const m = String(data || '').match(/^data:image\/(png|jpeg|webp|svg\+xml);base64,(.+)$/);
+      if (!m) throw new Error('Use a PNG, JPG, WebP or SVG image');
+      const ext = { png: 'png', jpeg: 'jpg', webp: 'webp', 'svg+xml': 'svg' }[m[1]];
+      const safe = String(name || 'image').toLowerCase().replace(/\.[a-z]+$/, '').replace(/[^a-z0-9-]+/g, '-').slice(0, 40) || 'image';
+      const buf = Buffer.from(m[2], 'base64');
+      if (buf.length > 2e6) throw new Error('Image is over 2 MB');
+      fs.mkdirSync(path.join(ROOT, 'assets', 'layers'), { recursive: true });
+      const rel = `assets/layers/${safe}.${ext}`;
+      fs.writeFileSync(path.join(ROOT, rel), buf);
+      return send(res, 200, { ok: true, src: rel });
+    }
     if (req.method === 'POST' && url.pathname === '/api/pull') {
       // Download the full catalog the cloud build published (the storefront blocks scripts from this PC).
       const msg = await require('./fetch').main('site');

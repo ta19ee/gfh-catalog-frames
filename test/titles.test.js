@@ -44,3 +44,8 @@ test('lint flags prices, discounts and unverified claims', () => {
   assert.ok(Tokens.lint({ bandText: '100.000+ happy customers' }).length);
   assert.ok(Tokens.lint({ rules: [{ text: 'Best price' }] }).length);
 });
+test('delivery threshold is not flagged as a price', () => {
+  assert.deepEqual(Tokens.lint({ bandText: 'Free delivery over €29 | Thousands of Indian & Asian groceries' }), []);
+  assert.deepEqual(Tokens.lint({ bandText: 'Gratis bezorging vanaf €29' }), []);
+  assert.ok(Tokens.lint({ bandText: 'Only €3,49' }).length);
+});

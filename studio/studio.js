@@ -2,7 +2,7 @@
 // using the same _tokens.js / _page.js as the nightly render.
 (() => {
   const $ = (s) => document.querySelector(s);
-  const state = { themes: {}, products: [], config: {}, name: '', tokens: null, saved: '', view: 'grid', selected: null };
+  const state = { themes: {}, products: [], config: {}, name: '', tokens: null, saved: '', view: 'grid', fmt: '1x1', selected: null };
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
   // ---- editable fields -------------------------------------------------------------
@@ -11,7 +11,23 @@
     ['Text', [
       ['label', 'Tag (all items)', 'text', 'Shown on every product, e.g. "Winter". Blank = no tag.'],
       ['foodLabel', 'Tag (groceries)', 'text', 'Optional. Used instead when the product type is a grocery.'],
-      ['bandText', 'Bottom band', 'text', 'Blank = config text'],
+      ['bandText', 'Bottom band', 'text', 'Use | to split into parts, e.g. "Free delivery over €29 | Thousands of Indian & Asian groceries"'],
+      ['sub.text', 'Sub-line', 'text', 'Optional line under the title, e.g. "Indian | Thai | Chinese | Korean | Japanese"'],
+      ['sub.color', 'Sub-line colour', 'color'],
+    ]],
+    ['Price', [
+      ['price.show', 'Show price', 'check'],
+      ['price.bg', 'Price fill', 'color'],
+      ['price.text', 'Price text', 'color'],
+      ['price.showPct', 'Show -% pill', 'check'],
+      ['price.pillBg', 'Pill fill', 'color'],
+      ['price.pillText', 'Pill text', 'color'],
+      ['price.showReference', 'Show was-price', 'check'],
+      ['price.label', 'Offer label', 'text', 'Shown only with a verified reduction. Blank = no label'],
+      ['price.labelBg', 'Label fill', 'color'],
+      ['price.labelText', 'Label text', 'color'],
+      ['price.minPct', 'Min. reduction %', 'range', [1, 50, 1]],
+      ['price.maxAgeDays', 'Show for (days)', 'range', [7, 60, 1]],
     ]],
     ['Background', [
       ['background.type', 'Type', 'select', ['linear', 'radial']],
@@ -90,7 +106,7 @@
     FIELDS.forEach(([title, fields], i) => {
       const d = document.createElement('details');
       d.open = i < 2;
-      d.innerHTML = `<summary>${title}</summary>`;
+      d.innerHTML = `<summary>${title}</summary>` + (title === 'Price' ? "<p class=\"hint\" style=\"margin:4px 0\">The price comes from Shopify and is re-rendered when it changes. The -% pill, was-price and label appear only when our own 30-day price history proves a reduction (EU rule), never from the Shopify compare-at price. Tick \"Sample reduction\" above the preview to check the design.</p>" : '');
       for (const [p, label, kind, extra] of fields) {
         const row = document.createElement('div');
         row.className = 'row';
@@ -176,14 +192,24 @@
   }
 
   // ---- preview -----------------------------------------------------------------------
-  function pageFor(p, compiled) {
+  // Price shown in the preview: the real price (with a reduction only if our history proves it),
+  // or, when "Sample reduction" is ticked, a made-up 20% reduction to check the design.
+  function priceFor(p) {
+    if (!p || !p.price) return null;
+    if ($('#sampleDisc').checked && !p.price.ref) return { now: p.price.now, ref: Math.round(p.price.now * 125) / 100, pct: 20 };
+    return p.price;
+  }
+
+  function pageFor(p, compiled, fmt) {
     return GFHPage.build(compiled, {
       ...GFHTokens.resolve(compiled, p),
       title: p.title,
+      sub: compiled.subText || '',
       photo: p.photo,
       logo: new URL('logo.png', location.href).href,
       bandText: compiled.bandText || state.config.freeDeliveryText,
-    });
+      price: priceFor(p),
+    }, fmt);
   }
 
   function visibleProducts() {
@@ -191,24 +217,28 @@
     return state.products.filter((p) => (!$('#stockOnly').checked || p.inStock) && (!q || [p.title, p.type, p.vendor, ...(p.tags || [])].join(' ').toLowerCase().includes(q)));
   }
 
-  function frameEl(p, size, html) {
+  function frameEl(p, fmt, html, caption) {
+    const F = GFHPage.FORMATS[fmt];
     const f = document.createElement('div');
     f.className = 'frame';
-    f.style.width = size ? size + 'px' : '100%';
-    f.style.aspectRatio = '1';
+    f.style.aspectRatio = `${F.w} / ${F.h}`;
     const ifr = document.createElement('iframe');
     ifr.setAttribute('sandbox', 'allow-same-origin');
+    ifr.style.width = F.w + 'px';
+    ifr.style.height = F.h + 'px';
     ifr.srcdoc = html;
     f.append(ifr);
-    new ResizeObserver(() => { ifr.style.transform = `scale(${f.clientWidth / 1080})`; }).observe(f);
+    new ResizeObserver(() => { ifr.style.transform = `scale(${f.clientWidth / F.w})`; }).observe(f);
     const card = document.createElement('div');
     card.className = 'card';
     const cap = document.createElement('div');
     cap.className = 'cap';
-    cap.textContent = `${p.type || 'no type'} · ${p.food ? 'grocery' : 'non-food'}${p.vendor ? ' · ' + p.vendor : ''}`;
+    cap.textContent = caption || `${p.type || 'no type'} · ${p.food ? 'grocery' : 'non-food'}${p.vendor ? ' · ' + p.vendor : ''}`;
     card.append(f, cap);
     return card;
   }
+
+  const euro = (n) => '€' + Number(n).toFixed(2).replace('.', ',');
 
   let renderTimer = null;
   function renderPreview() {
@@ -218,44 +248,57 @@
       const view = $('#view');
       view.innerHTML = '';
       const list = visibleProducts();
+      const fmt = state.fmt === 'all' ? '1x1' : state.fmt;
       if (!list.length) { view.innerHTML = '<p class="hint">No products. Run <code>node src/fetch.js</code> to load the catalog into data/products.json.</p>'; return; }
-      if (state.view === 'grid') {
+      if (state.view === 'grid' && state.fmt !== 'all') {
         const g = document.createElement('div');
         g.className = 'grid';
+        g.style.gridTemplateColumns = `repeat(auto-fill,minmax(${fmt === '9x16' ? 170 : 220}px,1fr))`;
         for (const p of list.slice(0, 24)) {
-          const f = frameEl(p, 0, pageFor(p, compiled));
+          const f = frameEl(p, fmt, pageFor(p, compiled, fmt));
           f.style.cursor = 'pointer';
           f.onclick = () => { state.selected = p.id; setView('single'); };
           g.append(f);
         }
         view.append(g);
         if (list.length > 24) view.insertAdjacentHTML('beforeend', `<p class="hint">Showing 24 of ${list.length}. Search to see others.</p>`);
-      } else {
-        const p = list.find((x) => x.id === state.selected) || list[0];
-        state.selected = p.id;
-        const wrap = document.createElement('div');
-        wrap.className = 'single';
-        const left = document.createElement('div');
-        left.append(frameEl(p, 0, pageFor(p, compiled)));
-        const right = document.createElement('div');
-        right.innerHTML = `<p><b>${GFHPage.esc(p.title)}</b><br><span class="hint">Shopify title: ${GFHPage.esc(p.rawTitle)}<br>Type: ${GFHPage.esc(p.type || '(none)')} · ID ${p.id}</span></p>
-<p><select id="pick" style="max-width:100%">${list.slice(0, 500).map((x) => `<option value="${x.id}" ${x.id === p.id ? 'selected' : ''}>${GFHPage.esc(x.title)}</option>`).join('')}</select></p>
-${StudioBackend.canRender ? '<p><button id="exactBtn">Render exact JPEG</button> <span class="hint">Same headless Chrome as the nightly job.</span></p>' : '<p class="hint">Exact JPEG render is in the local Studio (npm run studio).</p>'}<div class="exact" id="exact"></div>`;
-        wrap.append(left, right);
-        view.append(wrap);
-        $('#pick').onchange = (e) => { state.selected = e.target.value; renderPreview(); };
-        if ($('#exactBtn')) $('#exactBtn').onclick = renderExact;
+        return;
       }
+      const p = list.find((x) => x.id === state.selected) || list[0];
+      state.selected = p.id;
+      const info = document.createElement('div');
+      info.className = 'toolbar';
+      const pr = p.price ? euro(p.price.now) + (p.price.ref ? ` (verified reduction from ${euro(p.price.ref)}, -${p.price.pct}%)` : '') : 'no price';
+      info.innerHTML = `<select id="pick" style="max-width:420px">${list.slice(0, 500).map((x) => `<option value="${x.id}" ${x.id === p.id ? 'selected' : ''}>${GFHPage.esc(x.title)}</option>`).join('')}</select>
+<span class="hint">${GFHPage.esc(p.type || 'no type')} · ${pr} · ID ${p.id}</span>
+${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' : '<span class="hint">Exact JPEG render: local Studio only</span>'}`;
+      view.append(info);
+      const row = document.createElement('div');
+      row.className = 'sizes';
+      const fmts = state.fmt === 'all' ? Object.keys(GFHPage.FORMATS) : [fmt];
+      for (const f of fmts) {
+        const F = GFHPage.FORMATS[f];
+        const use = F.metaTag ? ' · Meta ' + F.metaTag : f === '1x1' ? ' · Meta image_link' : ' · not used by Meta';
+        const card = frameEl(p, f, pageFor(p, compiled, f), F.label + use);
+        card.style.width = state.fmt === 'all' ? `${Math.round((340 * F.w) / F.h)}px` : `min(${f === '9x16' ? 420 : 560}px,100%)`;
+        row.append(card);
+      }
+      view.append(row);
+      view.insertAdjacentHTML('beforeend', '<div class="exact" id="exact"></div>');
+      $('#pick').onchange = (e) => { state.selected = e.target.value; renderPreview(); };
+      if ($('#exactBtn')) $('#exactBtn').onclick = renderExact;
     }, 120);
   }
 
   async function renderExact() {
     const btn = $('#exactBtn');
+    const fmt = state.fmt === 'all' ? '1x1' : state.fmt;
+    const p = state.products.find((x) => x.id === state.selected);
     btn.disabled = true;
     btn.textContent = 'Rendering…';
     try {
-      const url = URL.createObjectURL(await StudioBackend.render(state.tokens, state.selected));
-      $('#exact').innerHTML = `<img src="${url}" alt="Rendered frame"><p class="hint">1080×1080 JPEG, as it will appear in the Meta catalog.</p>`;
+      const url = URL.createObjectURL(await StudioBackend.render(state.tokens, state.selected, fmt, priceFor(p)));
+      $('#exact').innerHTML = `<img src="${url}" alt="Rendered frame" style="max-width:min(560px,100%)"><p class="hint">${GFHPage.FORMATS[fmt].label} JPEG, rendered by the same headless Chrome as the nightly job.</p>`;
     } catch (e) {
       $('#exact').innerHTML = `<p class="status err">${GFHPage.esc(e.message)}</p>`;
     }
@@ -361,6 +404,12 @@ ${StudioBackend.canRender ? '<p><button id="exactBtn">Render exact JPEG</button>
     status(msg, 'ok');
   }
 
+  function setFmt(f) {
+    state.fmt = f;
+    document.querySelectorAll('#fmtSeg button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
+    renderPreview();
+  }
+
   function setView(v) {
     state.view = v;
     document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
@@ -386,6 +435,8 @@ ${StudioBackend.canRender ? '<p><button id="exactBtn">Render exact JPEG</button>
   $('#search').oninput = renderPreview;
   $('#stockOnly').onchange = renderPreview;
   document.querySelectorAll('#viewSeg button').forEach((b) => (b.onclick = () => setView(b.dataset.v)));
+  document.querySelectorAll('#fmtSeg button').forEach((b) => (b.onclick = () => setFmt(b.dataset.f)));
+  $('#sampleDisc').onchange = renderPreview;
   window.addEventListener('beforeunload', (e) => { if (state.tokens && JSON.stringify(state.tokens) !== state.saved) e.preventDefault(); });
   window.addEventListener('error', (e) => status('Studio error: ' + e.message + ' (reload the page; if it persists, restart npm run studio)', 'err'));
   if (StudioBackend.mode === 'hosted') {

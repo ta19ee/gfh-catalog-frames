@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { cleanTitle, isFood } = require('./titles');
+const { reduction } = require('./prices');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(__dirname, 'themes');
@@ -24,6 +25,9 @@ function readProducts({ inStockOnly = false, max = Infinity } = {}) {
   const file = path.join(ROOT, 'data', 'products.json');
   if (!fs.existsSync(file)) return [];
   const cfg = readConfig();
+  let history = {};
+  try { history = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'price-history.json'), 'utf8')); } catch {}
+  const today = new Date().toISOString().slice(0, 10);
   return JSON.parse(fs.readFileSync(file, 'utf8'))
     .map((p) => ({
       id: p.id,
@@ -36,6 +40,13 @@ function readProducts({ inStockOnly = false, max = Infinity } = {}) {
       food: isFood(p.type),
       photo: p.image + (p.image.includes('?') ? '&' : '?') + 'width=900',
       inStock: p.variants.some((v) => v.available),
+      // Price of the first in-stock variant, with a reduction only if our price history proves it.
+      price: (() => {
+        const v = p.variants.find((x) => x.available) || p.variants[0];
+        if (!v) return null;
+        const r = reduction(history[v.id], today);
+        return { now: Number(v.price), ref: r ? r.ref : null, pct: r ? r.pct : null };
+      })(),
     }))
     .filter((p) => !inStockOnly || p.inStock)
     .slice(0, max);

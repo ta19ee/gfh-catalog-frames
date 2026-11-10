@@ -3,7 +3,6 @@
   "shopDomain": "mydukaan-nl.myshopify.com",
   "storefront": "https://globalfoodhub.com",
   "siteUrl": "https://ta19ee.github.io/gfh-catalog-frames",
-  "size": 1080,
   "concurrency": 4,
   "freeDeliveryText": "Free delivery over €29",
   "maxTitleChars": 70,
@@ -19,5 +18,11 @@
       "to": "2027-02-28"
     }
   ],
-  "repo": "ta19ee/gfh-catalog-frames"
+  "repo": "ta19ee/gfh-catalog-frames",
+  "formats": [
+    "1x1",
+    "4x5",
+    "9x16"
+  ],
+  "jpegQuality": 74
 }

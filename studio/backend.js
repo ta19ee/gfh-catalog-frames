@@ -31,8 +31,8 @@
       if (!r.ok) throw new Error(j.error);
       return 'Saved schedule to config.json';
     },
-    async render(tokens, productId) {
-      const r = await fetch('/api/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens, productId }) });
+    async render(tokens, productId, fmt, price) {
+      const r = await fetch('/api/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens, productId, fmt, price }) });
       if (!r.ok) throw new Error((await r.json()).error);
       return r.blob();
     },

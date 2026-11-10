@@ -6,7 +6,6 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
-const { cleanTitle, isFood } = require('./titles');
 const data = require('./studio-data');
 
 const { ROOT, THEME_DIR, CONFIG, readConfig, readThemes } = data;
@@ -39,25 +38,19 @@ function saveSchedule({ theme, schedule }) {
 
 // Exact JPEG through the same headless-Chrome path as the nightly render.
 let browserP = null;
-async function renderExact(tokens, productId) {
+async function renderExact(tokens, productId, fmt = '1x1', price = null) {
   const frame = require('./frame');
-  const Tokens = require('./themes/_tokens');
-  const Page = require('./themes/_page');
-  const cfg = readConfig();
   const p = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'products.json'), 'utf8')).find((x) => x.id === productId);
   if (!p) throw new Error('Unknown product');
-  const t = Tokens.compile(tokens);
-  const html = Page.build(t, {
-    ...Tokens.resolve(t, frame.facts(p)),
-    title: cleanTitle(p.title, cfg.maxTitleChars),
-    photo: frame.photoUrl(p.image),
-    logo: frame.LOGO,
-    bandText: t.bandText || cfg.freeDeliveryText,
-  });
+  if (!frame.Page.FORMATS[fmt]) throw new Error('Unknown format');
+  const num = (v) => (v == null || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+  const pr = price ? { now: num(price.now), ref: num(price.ref), pct: num(price.pct) } : null;
+  const t = frame.Tokens.compile(tokens);
+  const html = frame.Page.build(t, frame.frameOptions(t, p, pr), fmt);
   browserP = browserP || frame.launch();
   const out = path.join(ROOT, 'previews', 'studio-exact.jpg');
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  const { failed } = await frame.renderAll(await browserP, [{ html, out }], { concurrency: 1 });
+  const { failed } = await frame.renderAll(await browserP, [{ html, out, fmt }], { concurrency: 1 });
   if (failed.length) throw new Error(failed[0].error);
   return fs.readFileSync(out);
 }
@@ -100,8 +93,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'PUT' && m) { saveTheme(m[1], await body(req)); return send(res, 200, { ok: true }); }
     if (req.method === 'PUT' && url.pathname === '/api/schedule') { saveSchedule(await body(req)); return send(res, 200, { ok: true }); }
     if (req.method === 'POST' && url.pathname === '/api/render') {
-      const { tokens, productId } = await body(req);
-      return send(res, 200, await renderExact(tokens, productId), 'image/jpeg');
+      const { tokens, productId, fmt, price } = await body(req);
+      return send(res, 200, await renderExact(tokens, productId, fmt, price), 'image/jpeg');
     }
     send(res, 404, { error: 'not found' });
   } catch (e) {

@@ -24,6 +24,10 @@
     band: { bg: '#142C73', text: '#FFFFFF' },
     deco: { shape: 'none', colors: ['#FFFFFF'], scale: 1, opacity: 0.85 },
     badge: { bg: '#E8352B', text: '#FFFFFF' },
+    sub: { text: '', color: '#1F3FBF' },
+    // Price block. The "-%" pill, struck-through reference price and label only appear when our own
+    // 30-day price history proves a reduction (EU rule), never from Shopify's compare-at price.
+    price: { show: false, bg: '#E30613', text: '#FFFFFF', label: 'Offer price', labelBg: '#0B1F4D', labelText: '#FFFFFF', pillBg: '#1F3FBF', pillText: '#FFFFFF', showPct: true, showReference: true, minPct: 5, maxAgeDays: 30 },
     rules: [],
     extraCss: '',
   };
@@ -51,11 +55,16 @@ body{background:${bgCss}}
 .title{color:${t.title.color};font-size:${t.title.size}px}
 .band{background:${t.band.bg};color:${t.band.text}}.band .dot{background:${t.band.text}}
 .badge{background:${t.badge.bg};color:${t.badge.text}}
+.sub{color:${t.sub.color}}
+.band .sep{background:${t.band.text}}
+.price .box{background:${t.price.bg};color:${t.price.text}}
+.price .lbl{background:${t.price.labelBg};color:${t.price.labelText}}
+.price .pill{background:${t.price.pillBg};color:${t.price.pillText}}
 ${t.extraCss || ''}`;
     const shape = SHAPES[t.deco.shape] || SHAPES.none;
     const colors = t.deco.colors && t.deco.colors.length ? t.deco.colors : ['#FFFFFF'];
     const deco = SPOTS.map(([x, y, s, r], i) => shape(x, y, Math.round(s * (t.deco.scale || 1)), r, colors[i % colors.length], t.deco.opacity)).join('');
-    return { label: t.label, foodLabel: t.foodLabel, bandText: t.bandText, rules: t.rules || [], css, deco };
+    return { label: t.label, foodLabel: t.foodLabel, bandText: t.bandText, subText: t.sub.text, price: t.price, rules: t.rules || [], css, deco };
   }
 
   // Rules: [{ field, value, action: 'badge'|'tag', text }]. First matching 'tag' rule replaces the
@@ -92,8 +101,14 @@ ${t.extraCss || ''}`;
     [/review|★★|rated|beoordeel|bewertung/i, 'No review or rating claims.'],
   ];
   function lint(tokens) {
-    const texts = [tokens.label, tokens.foodLabel, tokens.bandText, ...(tokens.rules || []).map((r) => r.text)].filter(Boolean).join(' | ');
-    return RISKY.filter(([re]) => re.test(texts)).map(([, msg]) => msg);
+    const texts = [tokens.label, tokens.foodLabel, tokens.bandText, tokens.sub && tokens.sub.text, ...(tokens.rules || []).map((r) => r.text)].filter(Boolean).join(' | ');
+    // A delivery threshold ("over €29", "vanaf €29") is not a product price.
+    const plain = texts.replace(/(over|from|vanaf|boven|ab|über|dès|à partir de)\s*€\s?\d+([.,]\d{2})?/gi, '');
+    const out = RISKY.filter(([re]) => re.test(plain)).map(([, msg]) => msg);
+    // The price label only shows with a verified reduction, so discount wording is fine there.
+    const lbl = tokens.price && tokens.price.label;
+    if (lbl) for (const [re, msg] of RISKY.slice(2)) if (re.test(lbl) && !out.includes(msg)) out.push(msg);
+    return out;
   }
 
   const api = { compile, lint, resolve, FIELDS, DEFAULTS, SHAPES: Object.keys(SHAPES) };

@@ -47,7 +47,8 @@ section.stage{overflow:auto;padding:16px;display:flex;flex-direction:column;gap:
 .card .cap{color:var(--muted);font-size:12px;padding:4px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .single{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.single>div:first-child{flex:1 1 420px;max-width:560px}.single>div:last-child{flex:1 1 260px;min-width:0}
-.exact img{width:100%;max-width:560px;border-radius:8px;display:block}
+.exact img{border-radius:8px;display:block;margin-top:12px}
+.sizes{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap}
 .hint{color:var(--muted);font-size:13px}
 .sched td{padding:4px}
 .sched input[type=date]{width:140px}
@@ -73,8 +74,10 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
   <section class="stage">
     <div class="toolbar">
       <div class="seg" id="viewSeg"><button data-v="grid" class="on">Grid</button><button data-v="single">Single</button></div>
+      <div class="seg" id="fmtSeg"><button data-f="1x1" class="on">1:1</button><button data-f="4x5">4:5</button><button data-f="9x16">9:16</button><button data-f="2x3">2:3</button><button data-f="all">All sizes</button></div>
       <input type="text" id="search" placeholder="Search title, type, vendor or tag…">
       <label><input type="checkbox" id="stockOnly" checked> In stock only</label>
+      <label title="Design check only: shows a made-up 20% reduction on products without a verified one"><input type="checkbox" id="sampleDisc"> Sample reduction</label>
       <span class="spacer"></span>
       <span class="hint" id="liveInfo"></span>
     </div>

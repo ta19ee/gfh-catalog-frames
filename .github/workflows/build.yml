@@ -2,7 +2,7 @@ name: Build catalog frames
 
 on:
   schedule:
-    - cron: '30 3 * * *' # daily 03:30 UTC, before Meta's daily feed fetch
+    - cron: '30 */6 * * *' # every 6 hours, so prices on frames follow Shopify (only changed products re-render)
   push:
     branches: [main]
     paths: ['src/**', 'studio/**', 'config.json', 'assets/**']
@@ -25,7 +25,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 340 # the first run renders every product in every format
     steps:
       - uses: actions/checkout@v4
 
@@ -43,7 +43,7 @@ jobs:
           chrome-version: stable
 
       - name: Restore rendered images
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: public/img
           key: frames-${{ github.run_id }}
@@ -61,6 +61,15 @@ jobs:
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
           THEME: ${{ inputs.theme }}
+          CONCURRENCY: 8
+
+      # Saved even if a later step fails, so finished renders are never lost.
+      - name: Save rendered images
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: public/img
+          key: frames-${{ github.run_id }}
 
       - name: Build feed
         run: node src/feed.js

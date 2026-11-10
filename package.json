@@ -9,7 +9,7 @@
     "feed": "node src/feed.js",
     "build": "node src/fetch.js && node src/render.js && node src/feed.js && node src/site.js",
     "preview": "node src/preview.js",
-    "test": "node --test test/titles.test.js test/themes.test.js",
+    "test": "node --test test/titles.test.js test/themes.test.js test/prices.test.js",
     "studio": "node src/studio.js",
     "site": "node src/site.js"
   },

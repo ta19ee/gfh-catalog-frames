@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('../config.json');
-const { activeTheme, pageHtml, keyFor, priceGroups, launch, renderAll, themes, Page, ROOT } = require('./frame');
+const { activeTheme, themeFor, pageHtml, keyFor, priceGroups, launch, renderAll, themes, Page, ROOT } = require('./frame');
 const prices = require('./prices');
 
 const IMG_DIR = path.join(ROOT, 'public', 'img');
@@ -32,25 +32,30 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
   fs.mkdirSync(IMG_DIR, { recursive: true });
   const manifest = { theme, formats, builtAt: new Date().toISOString(), products: {} };
   const jobs = [];
+  const used = {};
   for (const p of products) {
-    const groups = priceGroups(theme, p, history, today).map((g) => {
+    const design = themeFor(theme, p); // segment design, or the live theme
+    if (!themes[design]) throw new Error(`segment uses unknown theme "${design}"`);
+    used[design] = (used[design] || 0) + 1;
+    const groups = priceGroups(design, p, history, today).map((g) => {
       const files = {};
       for (const fmt of formats) {
-        const file = `${p.id}-${fmt}-${keyFor(theme, p, fmt, g.price)}.jpg`;
+        const file = `${p.id}-${fmt}-${keyFor(design, p, fmt, g.price)}.jpg`;
         files[fmt] = file;
-        if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: pageHtml(theme, p, fmt, g.price), out: path.join(IMG_DIR, file) });
+        if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: pageHtml(design, p, fmt, g.price), out: path.join(IMG_DIR, file) });
       }
       return { variants: g.variants, price: g.price, files };
     });
-    manifest.products[p.id] = { groups };
+    manifest.products[p.id] = { theme: design, groups };
   }
+  manifest.designs = used;
 
   // Drop images that are no longer referenced (old theme, changed photo or price, sold-out product).
   const keep = new Set(Object.values(manifest.products).flatMap((m) => m.groups.flatMap((g) => Object.values(g.files))));
   let removed = 0;
   for (const f of fs.readdirSync(IMG_DIR)) if (!keep.has(f)) { fs.unlinkSync(path.join(IMG_DIR, f)); removed++; }
 
-  console.log(`theme=${theme} formats=${formats.join(',')} products=${products.length} to_render=${jobs.length} removed=${removed}`);
+  console.log(`theme=${theme} designs=${JSON.stringify(used)} formats=${formats.join(',')} products=${products.length} to_render=${jobs.length} removed=${removed}`);
   const browser = await launch();
   const { done, failed } = await renderAll(browser, jobs, { onProgress: (n) => n % 200 === 0 && console.log(`  ${n} processed`) });
   await browser.close();

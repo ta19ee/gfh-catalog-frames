@@ -27,7 +27,7 @@
     sub: { text: '', color: '#1F3FBF' },
     // Price block. The "-%" pill, struck-through reference price and label only appear when our own
     // 30-day price history proves a reduction (EU rule), never from Shopify's compare-at price.
-    price: { show: false, bg: '#E30613', text: '#FFFFFF', label: 'Offer price', labelBg: '#0B1F4D', labelText: '#FFFFFF', pillBg: '#1F3FBF', pillText: '#FFFFFF', showPct: true, showReference: true, minPct: 5, maxAgeDays: 30 },
+    price: { show: false, bg: '#E30613', text: '#FFFFFF', label: 'Offer price', labelBg: '#0B1F4D', labelText: '#FFFFFF', pillBg: '#1F3FBF', pillText: '#FFFFFF', showPct: true, showReference: true, minPct: 5, maxAgeDays: 30, reference: 'history' },
     rules: [],
     extraCss: '',
   };
@@ -80,6 +80,8 @@ ${t.extraCss || ''}`;
       case 'title': return String(p.title || '').toLowerCase().includes(v);
       case 'newDays': return !!p.createdAt && (now - Date.parse(p.createdAt)) / 864e5 <= Number(v);
       case 'food': return !!p.food === (v !== 'no');
+      case 'collection': return (p.collections || []).some((c) => String(c).toLowerCase().includes(v));
+      case 'category': return String(p.category || '').toLowerCase().includes(v);
       default: return false;
     }
   }
@@ -90,7 +92,32 @@ ${t.extraCss || ''}`;
     const label = tagRule ? tagRule.text : compiled.foodLabel && p.food ? compiled.foodLabel : compiled.label;
     return { label: label || '', badge: badgeRule ? badgeRule.text : '' };
   }
-  const FIELDS = { tag: 'Shopify tag is', type: 'Product type contains', vendor: 'Vendor contains', title: 'Title contains', newDays: 'Created within N days', food: 'Is grocery (yes/no)' };
+  const FIELDS = { type: 'Product type contains', collection: 'Collection contains', category: 'Shopify category contains', tag: 'Shopify tag is', vendor: 'Vendor contains', title: 'Title contains', newDays: 'Created within N days', food: 'Is grocery (yes/no)' };
+
+  // Designs per product segment (like Confect's design per category).
+  // segments: [{ field, value, theme, during }]; the first match wins. "during" limits a segment
+  // to the time when that theme is the live one (blank = always).
+  function segmentTheme(segments, active, p, now = Date.now()) {
+    for (const s of segments || []) {
+      if (s.during && s.during !== active) continue;
+      if (s.theme && matches(s, p, now)) return s.theme;
+    }
+    return active;
+  }
+
+  // Which price, reference price and % to show.
+  // facts: { now, compareAt, verified: { ref, pct } | null, covered: bool }
+  // reference 'history' (default): only a reduction our own 30-day history proves.
+  // reference 'shopify': the Shopify compare-at price, but our history wins once it covers the
+  //   30 days before the current price (then a compare-at that is no real reduction is dropped).
+  function priceView(price, facts) {
+    if (!facts || !isFinite(facts.now)) return null;
+    const P = price || {};
+    let ref = facts.verified ? facts.verified.ref : null;
+    if (!ref && P.reference === 'shopify' && !facts.covered && Number(facts.compareAt) > facts.now) ref = Number(facts.compareAt);
+    const pct = ref ? Math.round(((ref - facts.now) / ref) * 100) : null;
+    return { now: facts.now, ref: pct >= (P.minPct || 5) ? ref : null, pct: pct >= (P.minPct || 5) ? pct : null };
+  }
 
   // Words that would make a frame claim something we can't back up (house rules / EU pricing rules).
   const RISKY = [
@@ -111,7 +138,7 @@ ${t.extraCss || ''}`;
     return out;
   }
 
-  const api = { compile, lint, resolve, FIELDS, DEFAULTS, SHAPES: Object.keys(SHAPES) };
+  const api = { compile, lint, resolve, matches, segmentTheme, priceView, FIELDS, DEFAULTS, SHAPES: Object.keys(SHAPES) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GFHTokens = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -52,7 +52,9 @@ section.stage{overflow:auto;padding:16px;display:flex;flex-direction:column;gap:
 .hint{color:var(--muted);font-size:13px}
 .sched td{padding:4px}
 .sched input[type=date]{width:140px}
-dialog{border:1px solid var(--line);border-radius:12px;padding:20px;max-width:640px;width:calc(100% - 32px)}
+dialog{border:1px solid var(--line);border-radius:12px;padding:20px;max-width:860px;width:calc(100% - 32px)}
+.sched select,.sched input[type=text]{max-width:190px}
+.more{margin-top:12px}
 dialog::backdrop{background:rgba(0,0,0,.3)}
 @media (max-width:900px){main{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:50vh}}
 </style>
@@ -64,6 +66,7 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
   <label>Theme <select id="themeSel"></select></label>
   <button id="dupBtn" title="Copy this theme under a new name">Duplicate…</button>
   <button id="schedBtn">Schedule…</button>
+  <button id="segBtn" title="Different designs for different product categories">Segments…</button>
   <span class="spacer"></span>
   <span id="status" class="status"></span>
   <button id="revertBtn">Revert</button>
@@ -78,6 +81,9 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
       <input type="text" id="search" placeholder="Search title, type, vendor or tag…">
       <label><input type="checkbox" id="stockOnly" checked> In stock only</label>
       <label title="Design check only: shows a made-up 20% reduction on products without a verified one"><input type="checkbox" id="sampleDisc"> Sample reduction</label>
+      <label title="Show each product with the design its segment gives it"><input type="checkbox" id="segView" checked> Apply segments</label>
+      <span class="hint" id="count"></span>
+      <button id="pullBtn" class="mini" title="Download the full catalog from the last cloud build">Load full catalog</button>
       <span class="spacer"></span>
       <span class="hint" id="liveInfo"></span>
     </div>
@@ -93,6 +99,14 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
   <table class="sched"><thead><tr><th align="left">Theme</th><th align="left">From</th><th align="left">To</th><th></th></tr></thead><tbody id="schedRows"></tbody></table>
   <p><button id="addRange" class="mini">+ Add date range</button></p>
   <p style="display:flex;gap:8px;justify-content:flex-end"><button id="schedCancel">Cancel</button><button id="schedSave" class="primary">Save schedule</button></p>
+</dialog>
+
+<dialog id="segDlg">
+  <h3 style="margin-top:0">Designs per product segment</h3>
+  <p class="hint">Give categories of products their own design, like Confect's design per category. The first matching row wins; other products use the live theme. "During" limits a row to the time when that theme is live (blank = always). Saving writes <code>config.json</code> (local) or opens a pull request (hosted).</p>
+  <table class="sched"><thead><tr><th align="left">Products where</th><th align="left">Value</th><th align="left">Use design</th><th align="left">During</th><th align="left">Matches</th><th></th></tr></thead><tbody id="segRows"></tbody></table>
+  <p><button id="addSeg" class="mini">+ Add segment</button></p>
+  <p style="display:flex;gap:8px;justify-content:flex-end"><button id="segCancel">Cancel</button><button id="segSave" class="primary">Save segments</button></p>
 </dialog>
 
 <script>window.addEventListener('error', function (e) { var s = document.getElementById('status'); if (s) { s.textContent = 'Studio error: ' + e.message + ' — restart npm run studio and reload'; s.className = 'status err'; } });</script>

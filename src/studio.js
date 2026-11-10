@@ -22,6 +22,21 @@ function saveTheme(name, tokens) {
   fs.writeFileSync(file, `${header}module.exports = ${JSON.stringify(tokens, null, 2)};\n`);
 }
 
+const FIELD_OK = ['type', 'collection', 'category', 'tag', 'vendor', 'title', 'newDays', 'food'];
+function saveSegments({ segments }) {
+  const themes = readThemes();
+  const clean = (segments || []).map((s) => {
+    if (!FIELD_OK.includes(s.field)) throw new Error(`Unknown field ${s.field}`);
+    if (!themes[s.theme]) throw new Error(`Unknown design ${s.theme}`);
+    if (s.during && !themes[s.during]) throw new Error(`Unknown theme ${s.during}`);
+    if (!String(s.value || '').trim()) throw new Error('Every segment needs a value');
+    return { field: s.field, value: String(s.value).trim(), theme: s.theme, during: s.during || '' };
+  });
+  const cfg = readConfig();
+  cfg.segments = clean;
+  fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2) + '\n');
+}
+
 function saveSchedule({ theme, schedule }) {
   const themes = readThemes();
   if (!themes[theme]) throw new Error(`Unknown default theme ${theme}`);
@@ -92,6 +107,12 @@ const server = http.createServer(async (req, res) => {
     const m = url.pathname.match(/^\/api\/themes\/([^/]+)$/);
     if (req.method === 'PUT' && m) { saveTheme(m[1], await body(req)); return send(res, 200, { ok: true }); }
     if (req.method === 'PUT' && url.pathname === '/api/schedule') { saveSchedule(await body(req)); return send(res, 200, { ok: true }); }
+    if (req.method === 'PUT' && url.pathname === '/api/segments') { saveSegments(await body(req)); return send(res, 200, { ok: true }); }
+    if (req.method === 'POST' && url.pathname === '/api/pull') {
+      // Download the full catalog the cloud build published (the storefront blocks scripts from this PC).
+      const msg = await require('./fetch').main('site');
+      return send(res, 200, { ok: true, message: msg });
+    }
     if (req.method === 'POST' && url.pathname === '/api/render') {
       const { tokens, productId, fmt, price } = await body(req);
       return send(res, 200, await renderExact(tokens, productId, fmt, price), 'image/jpeg');

@@ -38,6 +38,13 @@ function reduction(h, today, { maxAgeDays = 30 } = {}) {
   return { ref: low, pct: Math.round(((low - now) / low) * 100) };
 }
 
+// True when we have seen this variant for the full 30 days before its current price started.
+function covered(h) {
+  if (!h || !h.runs.length) return false;
+  const start = d(h.runs[h.runs.length - 1][0]);
+  return d(h.first) <= start - 30 * DAY;
+}
+
 async function load(url, localFile) {
   const fs = require('fs');
   try {
@@ -48,4 +55,4 @@ async function load(url, localFile) {
   return {};
 }
 
-module.exports = { record, reduction, load };
+module.exports = { record, reduction, covered, load };

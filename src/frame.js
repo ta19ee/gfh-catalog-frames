@@ -5,15 +5,13 @@ const path = require('path');
 const crypto = require('crypto');
 const config = require('../config.json');
 const { cleanTitle, isFood } = require('./titles');
-const { reduction } = require('./prices');
+const { reduction, covered } = require('./prices');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(__dirname, 'themes');
 const Page = require('./themes/_page');
 const Tokens = require('./themes/_tokens');
 const LOGO = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets', 'gfh-logo.png')).toString('base64');
-const read = (f) => fs.readFileSync(f, 'utf8');
-const SHARED_VERSION = ['_page.js', '_tokens.js'].map((f) => read(path.join(THEME_DIR, f))).join('') + read(__filename) + read(path.join(__dirname, 'titles.js')) + config.freeDeliveryText;
 
 // Every src/themes/<name>.js (not starting with "_") is a theme: a plain object of design tokens.
 function loadThemes() {
@@ -24,7 +22,7 @@ function loadThemes() {
     const file = path.join(THEME_DIR, f);
     delete require.cache[require.resolve(file)];
     const tokens = require(file);
-    out[name] = { name, tokens, ...Tokens.compile(tokens), version: JSON.stringify(tokens) };
+    out[name] = { name, tokens, ...Tokens.compile(tokens) };
   }
   return out;
 }
@@ -38,7 +36,10 @@ function activeTheme(today = new Date().toISOString().slice(0, 10)) {
 }
 
 const photoUrl = (src) => src + (src.includes('?') ? '&' : '?') + 'width=900';
-const facts = (p) => ({ type: p.type, vendor: p.vendor, title: p.title, tags: p.tags || [], createdAt: p.createdAt, food: isFood(p.type) });
+const facts = (p) => ({ type: p.type, vendor: p.vendor, title: p.title, tags: p.tags || [], createdAt: p.createdAt, collections: p.collections || [], category: p.category || '', food: isFood(p.type) });
+
+// The design a product gets: a matching segment in config.segments, else the live theme.
+const themeFor = (active, p) => Tokens.segmentTheme(config.segments, active, facts(p));
 const labelFor = (t, p) => Tokens.resolve(t, facts(p));
 
 function frameOptions(t, p, price) {
@@ -72,8 +73,8 @@ function priceGroups(themeName, p, history = {}, today = new Date().toISOString(
   if (!t.price || !t.price.show) return [{ variants: p.variants.map((v) => v.id), price: null }];
   const groups = new Map();
   for (const v of p.variants) {
-    const r = reduction(history[v.id], today, { maxAgeDays: t.price.maxAgeDays });
-    const price = { now: Number(v.price), ref: r ? r.ref : null, pct: r ? r.pct : null };
+    const h = history[v.id];
+    const price = Tokens.priceView(t.price, { now: Number(v.price), compareAt: v.compareAt, verified: reduction(h, today, { maxAgeDays: t.price.maxAgeDays }), covered: covered(h) });
     const k = JSON.stringify(price);
     if (!groups.has(k)) groups.set(k, { variants: [], price });
     groups.get(k).variants.push(v.id);
@@ -81,10 +82,10 @@ function priceGroups(themeName, p, history = {}, today = new Date().toISOString(
   return [...groups.values()];
 }
 
-// Changes when the theme file, shared layout, format, photo, title, label/badge or price changes.
+// Hash of the exact page that is rendered, so an image is re-rendered exactly when it would look
+// different (theme, layout code, photo, title, label, badge, price, format), and never otherwise.
 function keyFor(themeName, p, fmt = '1x1', price = null) {
-  const t = themeOf(themeName);
-  return crypto.createHash('sha1').update([themeName, t.version, SHARED_VERSION, fmt, p.image, p.title, JSON.stringify(labelFor(t, p)), JSON.stringify(price)].join('|')).digest('hex').slice(0, 12);
+  return crypto.createHash('sha1').update(fmt + '|' + pageHtml(themeName, p, fmt, price)).digest('hex').slice(0, 12);
 }
 
 async function launch() {
@@ -132,4 +133,4 @@ async function renderAll(browser, jobs, { concurrency = Number(process.env.CONCU
   return { done, failed };
 }
 
-module.exports = { Page, Tokens, frameOptions, priceGroups, themeOf, facts, loadThemes, LOGO, photoUrl, themes, activeTheme, pageHtml, keyFor, launch, renderAll, ROOT };
+module.exports = { themeFor, Page, Tokens, frameOptions, priceGroups, themeOf, facts, loadThemes, LOGO, photoUrl, themes, activeTheme, pageHtml, keyFor, launch, renderAll, ROOT };

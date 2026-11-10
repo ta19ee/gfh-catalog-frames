@@ -31,6 +31,18 @@
       if (!r.ok) throw new Error(j.error);
       return 'Saved schedule to config.json';
     },
+    async saveSegments(body) {
+      const r = await fetch('/api/segments', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      return 'Saved segments to config.json';
+    },
+    async pull() {
+      const r = await fetch('/api/pull', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      return j.message;
+    },
     async render(tokens, productId, fmt, price) {
       const r = await fetch('/api/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens, productId, fmt, price }) });
       if (!r.ok) throw new Error((await r.json()).error);
@@ -94,6 +106,16 @@
       window.open(url, '_blank', 'noopener');
       return `Pull request opened: ${url}`;
     },
+    async saveSegments(body) {
+      const url = await pullRequest('config.json', (old) => {
+        const cfg = JSON.parse(old);
+        cfg.segments = body.segments;
+        return JSON.stringify(cfg, null, 2) + '\n';
+      }, 'Frame Studio: update design segments', 'Segments edited in the hosted Frame Studio.');
+      window.open(url, '_blank', 'noopener');
+      return `Pull request opened: ${url}`;
+    },
+    async pull() { throw new Error('The hosted Studio always shows the full catalog of the last build.'); },
     async render() { throw new Error('Exact render is only in the local Studio (npm run studio).'); },
     forgetToken() { store.set(''); },
   };

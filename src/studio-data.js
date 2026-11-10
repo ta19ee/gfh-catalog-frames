@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { cleanTitle, isFood } = require('./titles');
-const { reduction } = require('./prices');
+const { reduction, covered } = require('./prices');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_DIR = path.join(__dirname, 'themes');
@@ -37,15 +37,17 @@ function readProducts({ inStockOnly = false, max = Infinity } = {}) {
       vendor: p.vendor || '',
       tags: p.tags || [],
       createdAt: p.createdAt || null,
+      collections: p.collections || [],
+      category: p.category || '',
       food: isFood(p.type),
       photo: p.image + (p.image.includes('?') ? '&' : '?') + 'width=900',
       inStock: p.variants.some((v) => v.available),
-      // Price of the first in-stock variant, with a reduction only if our price history proves it.
+      // Price facts of the first in-stock variant; the theme decides what to show (priceView).
       price: (() => {
         const v = p.variants.find((x) => x.available) || p.variants[0];
         if (!v) return null;
-        const r = reduction(history[v.id], today);
-        return { now: Number(v.price), ref: r ? r.ref : null, pct: r ? r.pct : null };
+        const h = history[v.id];
+        return { now: Number(v.price), compareAt: 'compareAt' in v ? (v.compareAt != null ? Number(v.compareAt) : null) : undefined, verified: reduction(h, today), covered: covered(h) };
       })(),
     }))
     .filter((p) => !inStockOnly || p.inStock)
@@ -62,7 +64,7 @@ function state(opts) {
   return {
     themes: readThemes(),
     products: readProducts(opts),
-    config: { theme: cfg.theme, schedule: cfg.schedule || [], freeDeliveryText: cfg.freeDeliveryText, active: activeTheme(cfg), repo: cfg.repo || '' },
+    config: { theme: cfg.theme, schedule: cfg.schedule || [], segments: cfg.segments || [], freeDeliveryText: cfg.freeDeliveryText, active: activeTheme(cfg), repo: cfg.repo || '' },
   };
 }
 

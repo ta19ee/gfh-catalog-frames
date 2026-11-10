@@ -9,9 +9,10 @@
     "feed": "node src/feed.js",
     "build": "node src/fetch.js && node src/render.js && node src/feed.js && node src/site.js",
     "preview": "node src/preview.js",
-    "test": "node --test test/titles.test.js test/themes.test.js test/prices.test.js",
+    "test": "node --test test/titles.test.js test/themes.test.js test/prices.test.js test/segments.test.js",
     "studio": "node src/studio.js",
-    "site": "node src/site.js"
+    "site": "node src/site.js",
+    "pull": "node src/fetch.js --from-site"
   },
   "dependencies": {
     "puppeteer-core": "^23.11.1"

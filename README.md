@@ -23,11 +23,15 @@ npm run studio        # opens http://localhost:4321
 - Live preview of the frame on real products: a grid, a single product, or **All sizes** side by side (1:1, 4:5, 9:16, 2:3), plus an exact JPEG render.
 - **Sizes**: 1:1 1080×1080 (Meta image_link), 4:5 1080×1350 (Meta `ASPECT_RATIO_4_5_PREFERRED`), 9:16 1080×1920 (Meta `ASPECT_RATIO_9_16_PREFERRED`, Stories/Reels) and 2:3 1000×1500 (not used by Meta). The nightly job renders the formats listed in `config.json` → `formats`.
 - **Dynamic elements**: product title, a sub-line (such as cuisines), a bottom band split into parts with `|`, rule badges and the **price block**.
-- **Price block** (off by default; turn on per theme): the current Shopify price, re-rendered whenever it changes. The **-% pill, struck-through was-price and "Offer price" label appear only when our own price history proves a reduction**: the was-price is the lowest price of the 30 days before the reduction (EU Omnibus rule), and it only shows for the first N days of the reduction. Shopify's compare-at price is never used. The history starts on the first run, so no reduction can show during the first 30 days. Tick "Sample reduction" in the Studio to check the design.
+- **Price block** (off by default; turn on per theme): the current Shopify price, re-rendered whenever it changes. The **-% pill, struck-through was-price and "Offer price" label appear only when our own price history proves a reduction**: the was-price is the lowest price of the 30 days before the reduction (EU Omnibus rule), and it only shows for the first N days of the reduction. The history starts on the first run.
+  - **Was-price from "history"** (default, safest): only our own 30-day history, so no reduction shows during the first 30 days.
+  - **Was-price from "shopify"**: the Shopify compare-at price, so reductions show straight away. You are responsible for that price being the lowest of the last 30 days. Once our history covers 30 days for a variant, it takes over and drops compare-at prices that are not a real reduction. Tick "Sample reduction" in the Studio to check the design.
 - Edit tag text (generic and grocery), bottom band, background gradient, tag, plate, title, band, badge colours, decoration and extra CSS.
 - **Rules**: badges and tag text driven by Shopify data, such as Shopify tag `vegan` → badge "Vegan", created within 30 days → badge "New", or vendor `Haldiram` → its own tag text. The Studio shows how many products each rule matches.
 - **House-rules check**: prices, discount wording, "best"/"largest" and unverified counts or reviews are flagged while you type. `npm test` blocks the nightly publish if a saved theme breaks these rules.
 - **Duplicate…** makes a new theme. **Schedule…** sets which theme is live on which dates.
+- **Segments…** gives categories of products their own design, like Confect's design per category: for example product type contains "Beauty" → `neutral`, or collection "snacks" → `christmas` only while `winter` is live. Match on product type, collection, Shopify category, tag, vendor, title, "new within N days" or grocery/non-food. The first matching row wins; everything else uses the live theme. "Apply segments" in the toolbar previews each product with its own design.
+- **Load full catalog** downloads every product from the last cloud build (`npm run pull`), because the storefront blocks scripts from this PC. Before that the Studio shows 12 sample products.
 - Local saves write `src/themes/<name>.js` and `config.json`. Commit and push them to go live.
 - The hosted Studio (`/studio/` on Pages) has the same editor. Saving there opens a GitHub pull request; merging it is the approval step. It asks once for a GitHub fine-grained token (this repo only, Contents + Pull requests read/write), which is kept only in that browser.
 
@@ -76,7 +80,8 @@ Editing or switching the live theme re-renders every image in the next run
 ## Local pipeline
 ```
 npm test
-node src/fetch.js            # needs SHOPIFY_ADMIN_TOKEN (the storefront rate-limits scripts)
+npm run pull                 # full catalog from the last cloud build (for the Studio)
+node src/fetch.js            # SHOPIFY_ADMIN_TOKEN: Admin API bulk export incl. collections and category; else storefront
 node src/render.js --limit 20
 node src/feed.js
 node src/site.js

@@ -2,7 +2,7 @@
   "theme": "autumn",
   "shopDomain": "mydukaan-nl.myshopify.com",
   "storefront": "https://globalfoodhub.com",
-  "siteUrl": "https://ta19ee.github.io/gfh-catalog-frames",
+  "siteUrl": "https://gfh-catalog-frames.fly.dev",
   "concurrency": 4,
   "freeDeliveryText": "Free delivery over €29",
   "maxTitleChars": 70,
@@ -20,7 +20,9 @@
   ],
   "repo": "ta19ee/gfh-catalog-frames",
   "formats": [
-    "1x1"
+    "1x1",
+    "4x5",
+    "9x16"
   ],
   "jpegQuality": 74,
   "segments": [],
@@ -87,5 +89,5 @@
       "British": "Britisch"
     }
   },
-  "_formatsNote": "4x5 and 9x16 are off until images move to Cloudflare R2: with Dutch + German they exceed the 1 GB GitHub Pages limit. Add them back to formats then."
+  "_formatsNote": "Sizes rendered for every product (1x1 is always on: Meta image_link). Images live on the Fly volume, so there is no 1 GB limit."
 }

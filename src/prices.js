@@ -47,11 +47,11 @@ function covered(h) {
 
 async function load(url, localFile) {
   const fs = require('fs');
+  try { return JSON.parse(fs.readFileSync(localFile, 'utf8')); } catch {}
   try {
     const r = await fetch(url, { cache: 'no-store' });
     if (r.ok) return await r.json();
   } catch {}
-  try { return JSON.parse(fs.readFileSync(localFile, 'utf8')); } catch {}
   return {};
 }
 

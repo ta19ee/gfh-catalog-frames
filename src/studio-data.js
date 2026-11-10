@@ -5,16 +5,17 @@ const { cleanTitle, isFood } = require('./titles');
 const { reduction, covered } = require('./prices');
 
 const ROOT = path.join(__dirname, '..');
-const THEME_DIR = path.join(__dirname, 'themes');
+const THEME_DIR = path.join(__dirname, 'themes'); // code: _tokens.js, _page.js
+const THEMES = process.env.THEMES_DIR || THEME_DIR; // theme files (on Fly: the volume)
 const CONFIG = path.join(ROOT, 'config.json');
 
 const readConfig = () => JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
 
 function readThemes() {
   const out = {};
-  for (const f of fs.readdirSync(THEME_DIR)) {
+  for (const f of fs.readdirSync(THEMES)) {
     if (!f.endsWith('.js') || f.startsWith('_')) continue;
-    const file = path.join(THEME_DIR, f);
+    const file = path.join(THEMES, f);
     delete require.cache[require.resolve(file)];
     out[f.slice(0, -3)] = require(file);
   }
@@ -69,4 +70,4 @@ function state(opts) {
   };
 }
 
-module.exports = { ROOT, THEME_DIR, CONFIG, readConfig, readThemes, readProducts, activeTheme, state };
+module.exports = { ROOT, THEME_DIR, THEMES, CONFIG, readConfig, readThemes, readProducts, activeTheme, state };

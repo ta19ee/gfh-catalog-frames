@@ -4,15 +4,32 @@ Puts a seasonal GlobalFoodHub frame around every in-stock product photo and publ
 Meta **supplementary feed** (`feed.csv`: `id,image_link`, one row per Shopify variant id) so
 catalog and dynamic ads show the framed images. It replaces Confect.
 
-Every 6 hours (and on every push to `main`) in GitHub Actions:
-fetch (Shopify Admin API) → render (headless Chrome, cached) → feed → hosted Studio → GitHub Pages.
+It runs as its own Fly.io app, **gfh-catalog-frames** (standalone: not in the GFH apps hub,
+own login). Every 6 hours (00:30, 06:30, 12:30, 18:30 UTC) and on **Rebuild now** in the Studio:
+fetch (Shopify) → render (headless Chrome, only changed products) → feeds.
 
-| URL (after setup) | What |
+| URL | What |
 |---|---|
-| `https://ta19ee.github.io/gfh-catalog-frames/` | Status page: live theme, sample images, products that could not be framed |
+| `https://gfh-catalog-frames.fly.dev/` | Status page: live theme, sample images, products that could not be framed |
 | `…/feed.csv` | The Meta supplementary feed (square image_link) |
 | `…/feed-multi.csv` | Same, plus tagged 4:5 and 9:16 images for placement-aware catalog ads |
-| `…/studio/` | Hosted Frame Studio (saving opens a pull request) |
+| `…/feed-languages.csv` | Meta language feed: Dutch and German images |
+| `…/studio/` | Frame Studio (login). Saves apply directly; live after the next rebuild |
+
+### Fly.io
+
+- App `gfh-catalog-frames` in Amsterdam, one machine (shared-cpu-2x, 2 GB) and a 5 GB volume `gfh_frames_data` at `/data`.
+- The volume holds everything that changes: `config.json`, `themes/`, `layers/` (uploaded images), `public/` (images, feeds, manifest, price history) and `data/products.json`. `docker-entrypoint.sh` links them into the app. Files from the repo are copied only when missing, so Studio changes survive deploys; new themes added in the repo appear after a deploy.
+- **The volume is the live copy; the repo is the backup.** With `GITHUB_TOKEN` set, every Studio save is committed to `main`.
+- Deploy code changes: `fly deploy --ha=false` (from this folder).
+- Logs: `fly logs -a gfh-catalog-frames`. Shell: `fly ssh console -a gfh-catalog-frames`.
+- Secrets (set them yourself; never in the repo or chat):
+  - `fly secrets set STUDIO_PASSWORD=… -a gfh-catalog-frames`: Studio login (required)
+  - `SHOPIFY_ADMIN_TOKEN` (read_products, optional): exact prices, collections and categories
+  - `GITHUB_TOKEN` (optional, fine-grained, Contents read/write on ta19ee/gfh-catalog-frames): backup of Studio changes
+  - `SESSION_SECRET`: already set
+- The first rebuild copies what the old GitHub Pages build rendered (`SEED_URL`), so only missing images are rendered.
+- The GitHub Pages workflow (`build.yml`) now runs only by hand, as a fallback.
 
 ## Frame Studio
 

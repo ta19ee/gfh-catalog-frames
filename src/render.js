@@ -61,12 +61,7 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
   }
   manifest.designs = used;
 
-  // Drop images that are no longer referenced (old theme, changed photo or price, sold-out product).
-  const keep = new Set(Object.values(manifest.products).flatMap((m) => m.groups.flatMap((g) => Object.values(g.files))));
-  let removed = 0;
-  for (const f of fs.readdirSync(IMG_DIR)) if (!keep.has(f)) { fs.unlinkSync(path.join(IMG_DIR, f)); removed++; }
-
-  console.log(`theme=${theme} designs=${JSON.stringify(used)} formats=${formats.join(',')} languages=${languages.map((l) => l.code).join(',') || 'none'} products=${products.length} to_render=${jobs.length} removed=${removed}`);
+  console.log(`theme=${theme} designs=${JSON.stringify(used)} formats=${formats.join(',')} languages=${languages.map((l) => l.code).join(',') || 'none'} products=${products.length} to_render=${jobs.length}`);
   const browser = await launch();
   const { done, failed } = await renderAll(browser, jobs, { onProgress: (n) => n % 200 === 0 && console.log(`  ${n} processed`) });
   await browser.close();
@@ -79,10 +74,21 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
     const f = failed.find((x) => x.job.id === id);
     return { id, title: f.job.title, error: f.error };
   });
-  fs.writeFileSync(MANIFEST, JSON.stringify(manifest));
   fs.writeFileSync(HISTORY, JSON.stringify(history));
-  console.log(`rendered=${done} failed=${failed.length} live_products=${Object.keys(manifest.products).length}`);
-  if (failedIds.size / products.length > 0.2) process.exit(1); // too many failures: don't publish
+  if (failedIds.size / products.length > 0.2) { // too many failures: keep the previous manifest and feed
+    console.error(`rendered=${done} failed=${failed.length}: too many failures, not publishing`);
+    process.exit(1);
+  }
+  // Drop images no longer referenced by this run or the previous one (the live feed may still
+  // point at the previous run's images until feed.js has written the new feed).
+  const filesOf = (m) => Object.values((m && m.products) || {}).flatMap((x) => x.groups.flatMap((g) => Object.values(g.files)));
+  let previous = null;
+  try { previous = JSON.parse(fs.readFileSync(MANIFEST, 'utf8')); } catch {}
+  const keep = new Set([...filesOf(manifest), ...filesOf(previous)]);
+  let removed = 0;
+  for (const f of fs.readdirSync(IMG_DIR)) if (!keep.has(f)) { fs.unlinkSync(path.join(IMG_DIR, f)); removed++; }
+  fs.writeFileSync(MANIFEST, JSON.stringify(manifest));
+  console.log(`rendered=${done} failed=${failed.length} removed=${removed} live_products=${Object.keys(manifest.products).length}`);
 })().catch((e) => {
   console.error(e);
   process.exit(1);

@@ -1,0 +1,9 @@
+node_modules
+data
+public
+previews
+.git
+.github
+.claude
+test
+*.log

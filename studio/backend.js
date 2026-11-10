@@ -1,9 +1,12 @@
 // Where the Studio loads from and saves to.
 // - local  (npm run studio): the Node server on localhost writes files directly.
+// - server (Fly.io, gfh-catalog-frames.fly.dev/studio/): same API behind a login; saves go live
+//   on the next rebuild (or "Rebuild now").
 // - hosted (GitHub Pages /studio/): read-only data from state.json; saving opens a GitHub
 //   pull request with the change, so nothing reaches the catalog until someone merges it.
 (() => {
   const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const isPages = location.hostname.endsWith('github.io');
   const TOKEN_KEY = 'gfh-studio-github-token';
   const store = {
     get: () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } },
@@ -135,6 +138,17 @@
     forgetToken() { store.set(''); },
   };
 
-  window.StudioBackend = isLocal ? local : hosted;
+  // Online on Fly: the local API plus rebuilds.
+  const json = async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; };
+  const server = {
+    ...local,
+    mode: 'server',
+    canBuild: true,
+    saveTheme: async (name, tokens) => (await local.saveTheme(name, tokens), `Saved theme ${name}: live after the next rebuild`),
+    async buildStatus() { return json(await fetch('/api/build')); },
+    async build() { return json(await fetch('/api/build', { method: 'POST' })); },
+  };
+
+  window.StudioBackend = isLocal ? local : isPages ? hosted : server;
   window.StudioBackend.themeFile = themeFile;
 })();

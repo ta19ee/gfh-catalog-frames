@@ -1,11 +1,7 @@
-name: Build catalog frames
+name: Build catalog frames (GitHub Pages fallback)
 
+# The live build runs on Fly.io (src/server.js). This workflow only runs by hand.
 on:
-  schedule:
-    - cron: '30 */6 * * *' # every 6 hours, so prices on frames follow Shopify (only changed products re-render)
-  push:
-    branches: [main]
-    paths: ['src/**', 'studio/**', 'config.json', 'assets/**']
   workflow_dispatch:
     inputs:
       theme:
@@ -80,6 +76,8 @@ jobs:
 
       - name: Build feed
         run: node src/feed.js
+        env:
+          SIZE_LIMIT_MB: 950
 
       - name: Publish hosted Studio
         run: node src/site.js

@@ -58,7 +58,8 @@ ${(manifest.failed || []).length ? `<h3>Not framed (Meta keeps the normal Shopif
 // GitHub Pages sites must stay under 1 GB.
 const bytes = fs.readdirSync(path.join(ROOT, 'public', 'img')).reduce((n, f) => n + fs.statSync(path.join(ROOT, 'public', 'img', f)).size, 0);
 console.log(`feed rows=${simple.length - 1} language rows=${langRows.length - 1} products=${products} images=${(bytes / 1e6).toFixed(1)} MB`);
-if (bytes > 950e6) {
-  console.error('Images exceed 950 MB: GitHub Pages allows 1 GB. Remove a format from config.formats or a language from config.languages, lower jpegQuality, or move images to Cloudflare R2.');
+const LIMIT_MB = process.env.SIZE_LIMIT_MB === undefined ? 950 : Number(process.env.SIZE_LIMIT_MB); // 0 = no limit (Fly volume)
+if (LIMIT_MB && bytes > LIMIT_MB * 1e6) {
+  console.error(`Images exceed ${LIMIT_MB} MB: GitHub Pages allows 1 GB.`, ' Remove a format from config.formats or a language from config.languages, lower jpegQuality, or move images to Cloudflare R2.');
   process.exit(1);
 }

@@ -8,7 +8,7 @@ const { cleanTitle, isFood } = require('./titles');
 const { reduction, covered } = require('./prices');
 
 const ROOT = path.join(__dirname, '..');
-const THEME_DIR = path.join(__dirname, 'themes');
+const THEME_DIR = process.env.THEMES_DIR || path.join(__dirname, 'themes');
 const Page = require('./themes/_page');
 const Tokens = require('./themes/_tokens');
 const LOGO = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets', 'gfh-logo.png')).toString('base64');

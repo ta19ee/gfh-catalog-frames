@@ -300,7 +300,7 @@
         const url = Object.assign(document.createElement('input'), { type: 'text', value: val || '', placeholder: 'assets/layers/… or https://…' });
         url.oninput = () => set(url.value);
         el.append(url);
-        if (StudioBackend.mode === 'local') {
+        if (StudioBackend.mode !== 'hosted') {
           const file = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml' });
           file.onchange = async () => {
             const f = file.files[0];
@@ -311,7 +311,7 @@
             if (!res.ok) return status(j.error, 'err');
             url.value = j.src;
             set(j.src);
-            status(`Saved ${j.src}: commit it with the theme`, 'ok');
+            status(StudioBackend.mode === 'local' ? `Saved ${j.src}: commit it with the theme` : `Uploaded ${j.src}`, 'ok');
           };
           el.append(file);
         }
@@ -630,7 +630,7 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
     let msg;
     try { msg = await StudioBackend.saveSchedule(body); } catch (e) { return alert(e.message); }
     $('#schedDlg').close();
-    if (StudioBackend.mode === 'local') await load(state.name);
+    if (StudioBackend.mode !== 'hosted') await load(state.name);
     status(msg, 'ok');
   }
 
@@ -771,7 +771,27 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
   $('#segCancel').onclick = () => $('#segDlg').close();
   $('#segSave').onclick = saveSegments;
   $('#pullBtn').onclick = pull;
-  if (StudioBackend.mode !== 'local') $('#pullBtn').hidden = true;
+  if (StudioBackend.mode === 'hosted') $('#pullBtn').hidden = true;
+  if (StudioBackend.mode === 'server') {
+    $('#pullBtn').textContent = 'Refresh from Shopify';
+    $('#buildBtn').hidden = false;
+    $('#logoutLink').hidden = false;
+    const showBuild = async () => {
+      let b;
+      try { b = await StudioBackend.buildStatus(); } catch { return; }
+      const btn = $('#buildBtn');
+      btn.disabled = b.running;
+      btn.textContent = b.running ? `Rebuilding: ${b.step}…` : 'Rebuild now';
+      btn.title = b.running ? (b.lines.slice(-1)[0] || '') : b.finishedAt ? `Last rebuild ${new Date(b.finishedAt).toLocaleString()}: ${b.ok ? 'OK' : 'failed (previous feed stays live)'}` : 'Render changed products and update the Meta feeds now';
+      setTimeout(showBuild, b.running ? 8000 : 60000);
+    };
+    $('#buildBtn').onclick = async () => {
+      if (!confirm('Rebuild the catalog images and Meta feeds now? Only changed products are re-rendered.')) return;
+      try { await StudioBackend.build(); status('Rebuild started', 'ok'); } catch (e) { status(e.message, 'err'); }
+      showBuild();
+    };
+    showBuild();
+  }
   $('#search').addEventListener('input', () => { state.show = 24; });
   window.addEventListener('beforeunload', (e) => { if (state.tokens && JSON.stringify(state.tokens) !== state.saved) e.preventDefault(); });
   window.addEventListener('error', (e) => status('Studio error: ' + e.message + ' (reload the page; if it persists, restart npm run studio)', 'err'));

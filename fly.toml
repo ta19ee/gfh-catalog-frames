@@ -1,0 +1,41 @@
+# GFH catalog frames: its own Fly app and URL (https://gfh-catalog-frames.fly.dev).
+# Standalone: not listed in the GFH apps hub and with its own Studio login.
+app = "gfh-catalog-frames"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PUBLIC_URL = "https://gfh-catalog-frames.fly.dev"
+  BUILD_HOURS = "0,6,12,18"      # rebuild at these UTC hours, at :30
+  CONCURRENCY = "3"              # browser tabs while rendering
+  SEED_URL = "https://ta19ee.github.io/gfh-catalog-frames"  # first build copies what Pages already rendered
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"     # stays up: Meta fetches feeds and images, and the rebuild runs on schedule
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
+
+# Images, feeds, settings and themes:  fly volumes create gfh_frames_data --size 5 --region ams
+[[mounts]]
+  source = "gfh_frames_data"
+  destination = "/data"
+
+# Secrets (set by you, never in the repo):
+#   STUDIO_PASSWORD      Studio login
+#   SESSION_SECRET       signs the login cookie
+#   SHOPIFY_ADMIN_TOKEN  optional, read_products: exact prices, collections and categories
+#   GITHUB_TOKEN         optional, contents read/write on ta19ee/gfh-catalog-frames: backs up Studio changes

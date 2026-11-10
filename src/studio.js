@@ -1,5 +1,6 @@
 // Frame Studio: a local web app for designing catalog frames on real products.
 // Usage: npm run studio   → http://localhost:4321
+// The same routes run online behind a login in src/server.js (Fly.io).
 // It only listens on localhost and writes theme files into src/themes/ and the schedule
 // into config.json. Nothing goes live until the GitHub workflow runs with the pushed files.
 const http = require('http');
@@ -8,7 +9,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const data = require('./studio-data');
 
-const { ROOT, THEME_DIR, CONFIG, readConfig, readThemes } = data;
+const { ROOT, THEME_DIR, THEMES, CONFIG, readConfig, readThemes } = data;
 const PORT = Number(process.env.PORT) || 4321;
 const NAME_OK = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
@@ -16,7 +17,7 @@ function saveTheme(name, tokens) {
   if (!NAME_OK.test(name)) throw new Error('Theme name: lowercase letters, digits and dashes only');
   if (typeof tokens !== 'object' || Array.isArray(tokens)) throw new Error('Bad theme');
   require('./themes/_tokens').compile(tokens); // throws on a broken theme
-  const file = path.join(THEME_DIR, `${name}.js`);
+  const file = path.join(THEMES, `${name}.js`);
   // Keep the comment block at the top of an existing theme file.
   const header = fs.existsSync(file) ? (fs.readFileSync(file, 'utf8').match(/^(\s*\/\/.*\n)+/) || [''])[0] : `// ${name} theme, created in Frame Studio ${new Date().toISOString().slice(0, 10)}.\n`;
   fs.writeFileSync(file, `${header}module.exports = ${JSON.stringify(tokens, null, 2)};\n`);
@@ -98,13 +99,8 @@ const send = (res, code, data, type = 'application/json') => {
   res.end(type === 'application/json' ? JSON.stringify(data) : data);
 };
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
-  try {
-    // Only accept same-origin writes (blocks other websites from posting to this local server).
-    if (req.method !== 'GET' && req.headers.origin && req.headers.origin !== `http://localhost:${PORT}` && req.headers.origin !== `http://127.0.0.1:${PORT}`) return send(res, 403, { error: 'forbidden' });
-    const file = req.method === 'GET' && !url.pathname.startsWith('/api/') && staticFile(decodeURIComponent(url.pathname));
-    if (file) return send(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || 'application/octet-stream');
+// The Studio API. Returns false when the route is not an API route.
+async function api(req, res, url) {
     if (req.method === 'GET' && url.pathname === '/api/state') {
       return send(res, 200, data.state());
     }
@@ -147,7 +143,20 @@ const server = http.createServer(async (req, res) => {
       const { tokens, productId, fmt, price, lang } = await body(req);
       return send(res, 200, await renderExact(tokens, productId, fmt, price, lang || null), 'image/jpeg');
     }
-    send(res, 404, { error: 'not found' });
+    return false;
+}
+
+module.exports = { api, staticFile, send, body, TYPES };
+if (require.main !== module) return;
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  try {
+    // Only accept same-origin writes (blocks other websites from posting to this local server).
+    if (req.method !== 'GET' && req.headers.origin && req.headers.origin !== `http://localhost:${PORT}` && req.headers.origin !== `http://127.0.0.1:${PORT}`) return send(res, 403, { error: 'forbidden' });
+    const file = req.method === 'GET' && !url.pathname.startsWith('/api/') && staticFile(decodeURIComponent(url.pathname));
+    if (file) return send(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || 'application/octet-stream');
+    if ((await api(req, res, url)) === false) send(res, 404, { error: 'not found' });
   } catch (e) {
     send(res, 400, { error: e.message });
   }

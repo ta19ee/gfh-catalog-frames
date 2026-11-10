@@ -30,14 +30,26 @@ for (const { groups } of Object.values(manifest.products)) {
 fs.writeFileSync(path.join(ROOT, 'public', 'feed.csv'), simple.join('\n') + '\n');
 fs.writeFileSync(path.join(ROOT, 'public', 'feed-multi.csv'), multi.join('\n') + '\n');
 
+// Meta language feed: per variant and language, the localized square image as image[0].url.
+// Meta shows it to people whose Facebook/Instagram language matches the override code.
+const langs = manifest.languages || [];
+const langRows = ['id,override,image[0].url'];
+for (const { groups } of Object.values(manifest.products)) {
+  for (const g of groups) for (const lang of langs) {
+    const file = g.files[`1x1@${lang}`];
+    if (file) for (const v of g.variants) langRows.push(`${v},${lang},${url(file)}`);
+  }
+}
+fs.writeFileSync(path.join(ROOT, 'public', 'feed-languages.csv'), langRows.join('\n') + '\n');
+
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const sample = Object.values(manifest.products).slice(0, 24).map((m) => `<img src="img/${m.groups[0].files['1x1']}" width="180" height="180" loading="lazy">`).join('');
-const formatsRow = Object.values(manifest.products).slice(0, 1).flatMap((m) => Object.entries(m.groups[0].files).map(([f, file]) => `<figure style="margin:0"><img src="img/${file}" height="240" loading="lazy"><figcaption>${FORMATS[f].label}</figcaption></figure>`)).join('');
+const formatsRow = Object.values(manifest.products).slice(0, 1).flatMap((m) => Object.entries(m.groups[0].files).map(([f, file]) => `<figure style="margin:0"><img src="img/${file}" height="240" loading="lazy"><figcaption>${f.includes('@') ? FORMATS[f.split('@')[0]].label + ' · ' + f.split('@')[1] : FORMATS[f].label}</figcaption></figure>`)).join('');
 fs.writeFileSync(
   path.join(ROOT, 'public', 'index.html'),
   `<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>GFH catalog frames</title>
 <body style="font:16px system-ui;margin:24px"><p>Theme: <b>${esc(manifest.theme)}</b> · formats ${esc((manifest.formats || []).join(', '))} · built ${esc(manifest.builtAt || '')} · ${products} products · ${simple.length - 1} feed rows ·
-<a href="feed.csv">feed.csv</a> · <a href="feed-multi.csv">feed-multi.csv</a> · <a href="studio/">Frame Studio</a></p>
+<a href="feed.csv">feed.csv</a> · <a href="feed-multi.csv">feed-multi.csv</a> · <a href="feed-languages.csv">feed-languages.csv</a> (${esc(langs.join(', ') || 'no languages')}) · <a href="studio/">Frame Studio</a></p>
 <div style="display:flex;gap:12px;align-items:end;margin-bottom:16px">${formatsRow}</div>
 <div style="display:flex;flex-wrap:wrap;gap:8px">${sample}</div>
 ${(manifest.failed || []).length ? `<h3>Not framed (Meta keeps the normal Shopify photo)</h3><ul>${manifest.failed.map((x) => `<li>${esc(x.id)} ${esc(x.title)}: ${esc(x.error)}</li>`).join('')}</ul>` : ''}`,
@@ -45,8 +57,8 @@ ${(manifest.failed || []).length ? `<h3>Not framed (Meta keeps the normal Shopif
 
 // GitHub Pages sites must stay under 1 GB.
 const bytes = fs.readdirSync(path.join(ROOT, 'public', 'img')).reduce((n, f) => n + fs.statSync(path.join(ROOT, 'public', 'img', f)).size, 0);
-console.log(`feed rows=${simple.length - 1} products=${products} images=${(bytes / 1e6).toFixed(1)} MB`);
+console.log(`feed rows=${simple.length - 1} language rows=${langRows.length - 1} products=${products} images=${(bytes / 1e6).toFixed(1)} MB`);
 if (bytes > 950e6) {
-  console.error('Images exceed 950 MB: GitHub Pages allows 1 GB. Remove a format from config.formats or lower jpegQuality.');
+  console.error('Images exceed 950 MB: GitHub Pages allows 1 GB. Remove a format from config.formats or a language from config.languages, lower jpegQuality, or move images to Cloudflare R2.');
   process.exit(1);
 }

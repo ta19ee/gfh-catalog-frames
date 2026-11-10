@@ -20,10 +20,72 @@
   ],
   "repo": "ta19ee/gfh-catalog-frames",
   "formats": [
-    "1x1",
-    "4x5",
-    "9x16"
+    "1x1"
   ],
   "jpegQuality": 74,
-  "segments": []
+  "segments": [],
+  "languages": [
+    {
+      "code": "nl_XX",
+      "name": "Dutch"
+    },
+    {
+      "code": "de_XX",
+      "name": "German"
+    }
+  ],
+  "languageFormats": [
+    "1x1"
+  ],
+  "translations": {
+    "nl_XX": {
+      "Free delivery over €29": "Gratis bezorging vanaf €29",
+      "Thousands of Indian & Asian groceries": "Duizenden Indiase & Aziatische boodschappen",
+      "Autumn": "Herfst",
+      "Autumn pantry": "Herfstvoorraad",
+      "Winter": "Winter",
+      "Winter warmers": "Warm de winter door",
+      "Black Week": "Black Week",
+      "Festive season": "Feestdagen",
+      "Festive pantry": "Feestelijke voorraad",
+      "Offer price": "Aanbiedingsprijs",
+      "Shop now": "Nu bestellen",
+      "New": "Nieuw",
+      "Vegan": "Vegan",
+      "Was {was} · now {price}": "Was {was} · nu {price}",
+      "Free Delivery over €29*": "Gratis bezorging vanaf €29*",
+      "Indian": "Indiaas",
+      "Thai": "Thais",
+      "Chinese": "Chinees",
+      "Korean": "Koreaans",
+      "Japanese": "Japans",
+      "Vietnamese": "Vietnamees",
+      "British": "Brits"
+    },
+    "de_XX": {
+      "Free delivery over €29": "Kostenloser Versand ab 29 €",
+      "Thousands of Indian & Asian groceries": "Tausende indische & asiatische Lebensmittel",
+      "Autumn": "Herbst",
+      "Autumn pantry": "Herbstvorrat",
+      "Winter": "Winter",
+      "Winter warmers": "Winterwärme",
+      "Black Week": "Black Week",
+      "Festive season": "Festtage",
+      "Festive pantry": "Festtagsvorrat",
+      "Offer price": "Angebotspreis",
+      "Shop now": "Jetzt bestellen",
+      "New": "Neu",
+      "Vegan": "Vegan",
+      "Was {was} · now {price}": "Statt {was} · jetzt {price}",
+      "Free Delivery over €29*": "Kostenloser Versand ab 29 €*",
+      "Indian": "Indisch",
+      "Thai": "Thailändisch",
+      "Chinese": "Chinesisch",
+      "Korean": "Koreanisch",
+      "Japanese": "Japanisch",
+      "Vietnamese": "Vietnamesisch",
+      "British": "Britisch"
+    }
+  },
+  "_formatsNote": "4x5 and 9x16 are off until images move to Cloudflare R2: with Dutch + German they exceed the 1 GB GitHub Pages limit. Add them back to formats then."
 }

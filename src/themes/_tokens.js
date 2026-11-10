@@ -147,6 +147,36 @@ ${t.extraCss || ''}`;
     }
   }
 
+  // Every text a theme can put on a frame (for the translation editor).
+  function texts(compiled, fallbackBand) {
+    const out = [];
+    const add = (s) => { s = String(s || '').trim(); if (s && !out.includes(s)) out.push(s); };
+    add(compiled.label); add(compiled.foodLabel);
+    String(compiled.subText || '').split('|').forEach(add);
+    String(compiled.bandText || fallbackBand || '').split('|').forEach(add);
+    if (compiled.price && compiled.price.show) add(compiled.price.label);
+    (compiled.rules || []).forEach((r) => add(r.text));
+    (compiled.layers || []).forEach((l) => { if (l.kind === 'text' || l.kind === 'box') add(l.text); });
+    return out;
+  }
+
+  // A compiled theme with its texts swapped for one language. dict: { "Free delivery over €29": "Gratis…" }
+  // Texts without a translation stay as they are; band parts (split by |) are translated one by one.
+  function translate(compiled, dict, fallbackBand) {
+    if (!dict) return compiled;
+    const tr = (s) => { const k = String(s || '').trim(); return k && dict[k] ? dict[k] : s; };
+    return {
+      ...compiled,
+      label: tr(compiled.label),
+      foodLabel: tr(compiled.foodLabel),
+      subText: compiled.subText ? String(compiled.subText).split('|').map((x) => tr(x.trim())).join(' | ') : compiled.subText,
+      bandText: String(compiled.bandText || fallbackBand || '').split('|').map((x) => tr(x.trim())).join(' | '),
+      price: compiled.price ? { ...compiled.price, label: tr(compiled.price.label) } : compiled.price,
+      rules: (compiled.rules || []).map((r) => ({ ...r, text: tr(r.text) })),
+      layers: (compiled.layers || []).map((l) => (l.kind === 'text' || l.kind === 'box' ? { ...l, text: tr(l.text) } : l)),
+    };
+  }
+
   // Which price, reference price and % to show.
   // facts: { now, compareAt, verified: { ref, pct } | null, covered: bool }
   // reference 'history' (default): only a reduction our own 30-day history proves.
@@ -172,7 +202,7 @@ ${t.extraCss || ''}`;
   function lint(tokens) {
     const texts = [tokens.label, tokens.foodLabel, tokens.bandText, tokens.sub && tokens.sub.text, ...(tokens.rules || []).map((r) => r.text), ...(tokens.layers || []).filter((l) => !/\{(was|pct)\}/.test(l.text || '')).map((l) => String(l.text || '').replace(/\{price\}/g, ''))].filter(Boolean).join(' | ');
     // A delivery threshold ("over €29", "vanaf €29") is not a product price.
-    const plain = texts.replace(/(over|from|vanaf|boven|ab|über|dès|à partir de)\s*€\s?\d+([.,]\d{2})?/gi, '');
+    const plain = texts.replace(/(over|from|vanaf|boven|ab|über|dès|à partir de)\s*(€\s?\d+([.,]\d{2})?|\d+([.,]\d{2})?\s?€)/gi, '');
     const out = RISKY.filter(([re]) => re.test(plain)).map(([, msg]) => msg);
     // The price label only shows with a verified reduction, so discount wording is fine there.
     const guarded = [tokens.price && tokens.price.label, ...(tokens.layers || []).filter((l) => /\{(was|pct)\}/.test(l.text || '')).map((l) => l.text)].filter(Boolean);
@@ -180,7 +210,7 @@ ${t.extraCss || ''}`;
     return out;
   }
 
-  const api = { compile, lint, resolve, matches, segmentTheme, priceView, layersFor, PATTERNS: Object.keys(PATTERNS), FIELDS, DEFAULTS, SHAPES: Object.keys(SHAPES) };
+  const api = { compile, lint, texts, translate, resolve, matches, segmentTheme, priceView, layersFor, PATTERNS: Object.keys(PATTERNS), FIELDS, DEFAULTS, SHAPES: Object.keys(SHAPES) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GFHTokens = api;
 })(typeof window !== 'undefined' ? window : globalThis);

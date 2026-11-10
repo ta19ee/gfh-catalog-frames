@@ -61,11 +61,18 @@ Editing or switching the live theme re-renders every image in the next run
 - No discount or strike-through claims unless the offer is decided. Under EU rules a strike-through price must be the lowest price of the last 30 days.
 - No unverified claims (no customer counts, "largest", or "best"). Use "Thousands of Indian & Asian groceries".
 
+## Languages (Dutch, German)
+- `config.json` → `languages` lists the languages (`{ "code": "nl_XX", "name": "Dutch" }`, German `de_XX`), and `translations` holds one shared dictionary per language for every text on the frames: tags, band parts, sub-line parts, layer texts and the offer label.
+- In the Studio: the **Language** switcher previews a language, and **Translations…** edits the dictionary. Missing translations are marked; an empty one keeps the main text. The house-rules check applies in every language.
+- The build renders a square image per language (`config.languageFormats`) and publishes `feed-languages.csv` (`id,override,image[0].url`). Add it in Commerce Manager as a **language feed** (Data sources → Country and language feeds). Meta shows the Dutch or German image to people whose Facebook/Instagram language is Dutch or German; everyone else sees the main image. Test it on a few products first.
+- Product titles stay as they are in Shopify.
+- To add French (for Belgium): add `{ "code": "fr_XX", "name": "French" }` to `languages` and fill in its translations. That is about another 270 MB of images.
+
 ## Notes on prices and sizes
 - Product images now carry the price, so a Shopify price change shows in the frame after the next run (at most about 6 hours) plus Meta's feed fetch. Meta also shows its own live price under the ad.
 - Variants with different prices get their own image (the feed maps each variant to the right one).
 - `feed-multi.csv` uses Meta's `image[n].url` / `image[n].tag[0]` columns. Test it on a small product set in Commerce Manager before switching the live feed to it; `feed.csv` stays the safe default.
-- GitHub Pages allows 1 GB. The feed step fails before publishing if images exceed 950 MB; then drop a format or lower `jpegQuality` in `config.json`.
+- GitHub Pages allows 1 GB. At about 80–95 KB per image, 3 sizes **or** 1:1 in English + Dutch + German fit (about 830–890 MB), but not both. That is why `formats` is `["1x1"]` for now. Moving images to Cloudflare R2 (free up to 10 GB) removes the limit. The feed step fails before publishing if images exceed 950 MB; then drop a format or lower `jpegQuality` in `config.json`.
 
 ## Go-live checklist
 1. Create the public repo and push:

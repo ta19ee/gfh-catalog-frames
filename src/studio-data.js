@@ -65,7 +65,7 @@ function state(opts) {
   return {
     themes: readThemes(),
     products: readProducts(opts),
-    config: { theme: cfg.theme, schedule: cfg.schedule || [], segments: cfg.segments || [], freeDeliveryText: cfg.freeDeliveryText, active: activeTheme(cfg), repo: cfg.repo || '' },
+    config: { theme: cfg.theme, schedule: cfg.schedule || [], segments: cfg.segments || [], languages: cfg.languages || [], translations: cfg.translations || {}, freeDeliveryText: cfg.freeDeliveryText, active: activeTheme(cfg), repo: cfg.repo || '' },
   };
 }
 

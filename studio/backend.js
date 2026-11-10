@@ -37,14 +37,20 @@
       if (!r.ok) throw new Error(j.error);
       return 'Saved segments to config.json';
     },
+    async saveTranslations(body) {
+      const r = await fetch('/api/translations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      return 'Saved translations to config.json';
+    },
     async pull() {
       const r = await fetch('/api/pull', { method: 'POST' });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       return j.message;
     },
-    async render(tokens, productId, fmt, price) {
-      const r = await fetch('/api/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens, productId, fmt, price }) });
+    async render(tokens, productId, fmt, price, lang) {
+      const r = await fetch('/api/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens, productId, fmt, price, lang }) });
       if (!r.ok) throw new Error((await r.json()).error);
       return r.blob();
     },
@@ -112,6 +118,15 @@
         cfg.segments = body.segments;
         return JSON.stringify(cfg, null, 2) + '\n';
       }, 'Frame Studio: update design segments', 'Segments edited in the hosted Frame Studio.');
+      window.open(url, '_blank', 'noopener');
+      return `Pull request opened: ${url}`;
+    },
+    async saveTranslations(body) {
+      const url = await pullRequest('config.json', (old) => {
+        const cfg = JSON.parse(old);
+        cfg.translations = body.translations;
+        return JSON.stringify(cfg, null, 2) + '\n';
+      }, 'Frame Studio: update translations', 'Translations edited in the hosted Frame Studio.');
       window.open(url, '_blank', 'noopener');
       return `Pull request opened: ${url}`;
     },

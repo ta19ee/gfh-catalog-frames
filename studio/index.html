@@ -54,6 +54,9 @@ section.stage{overflow:auto;padding:16px;display:flex;flex-direction:column;gap:
 .sched input[type=date]{width:140px}
 dialog{border:1px solid var(--line);border-radius:12px;padding:20px;max-width:860px;width:calc(100% - 32px)}
 .sched select,.sched input[type=text]{max-width:190px}
+#trRows input{width:100%;max-width:none}
+#trRows td:first-child{font-weight:600;white-space:nowrap;padding-right:12px}
+#trRows input.missing{border-color:#F39200}
 .more{margin-top:12px}
 dialog::backdrop{background:rgba(0,0,0,.3)}
 @media (max-width:900px){main{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:50vh}}
@@ -67,6 +70,7 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
   <button id="dupBtn" title="Copy this theme under a new name">Duplicate…</button>
   <button id="schedBtn">Schedule…</button>
   <button id="segBtn" title="Different designs for different product categories">Segments…</button>
+  <button id="trBtn" title="Dutch and German texts for the language feed">Translations…</button>
   <span class="spacer"></span>
   <span id="status" class="status"></span>
   <button id="revertBtn">Revert</button>
@@ -81,6 +85,7 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
       <input type="text" id="search" placeholder="Search title, type, vendor or tag…">
       <label><input type="checkbox" id="stockOnly" checked> In stock only</label>
       <label title="Design check only: shows a made-up 20% reduction on products without a verified one"><input type="checkbox" id="sampleDisc"> Sample reduction</label>
+      <label title="Preview the frame as people with this Facebook/Instagram language see it">Language <select id="langSel"><option value="">Main (English)</option></select></label>
       <label title="Show each product with the design its segment gives it"><input type="checkbox" id="segView" checked> Apply segments</label>
       <span class="hint" id="count"></span>
       <button id="pullBtn" class="mini" title="Download the full catalog from the last cloud build">Load full catalog</button>
@@ -107,6 +112,14 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
   <table class="sched"><thead><tr><th align="left">Products where</th><th align="left">Value</th><th align="left">Use design</th><th align="left">During</th><th align="left">Dates (optional)</th><th align="left">Matches</th><th></th></tr></thead><tbody id="segRows"></tbody></table>
   <p><button id="addSeg" class="mini">+ Add segment</button></p>
   <p style="display:flex;gap:8px;justify-content:flex-end"><button id="segCancel">Cancel</button><button id="segSave" class="primary">Save segments</button></p>
+</dialog>
+
+<dialog id="trDlg">
+  <h3 style="margin-top:0">Translations</h3>
+  <p class="hint">Every text on the frames, per language. People whose Facebook/Instagram language is Dutch or German see these versions (Meta language feed); everyone else sees the main text. One dictionary for all themes, so a text is translated once. Empty = keeps the main text. The house-rules check applies in every language.</p>
+  <div id="trWarn"></div>
+  <div style="max-height:60vh;overflow:auto"><table class="sched" style="width:100%"><thead id="trHead"></thead><tbody id="trRows"></tbody></table></div>
+  <p style="display:flex;gap:8px;justify-content:flex-end"><button id="trCancel">Cancel</button><button id="trSave" class="primary">Save translations</button></p>
 </dialog>
 
 <script>window.addEventListener('error', function (e) { var s = document.getElementById('status'); if (s) { s.textContent = 'Studio error: ' + e.message + ' — restart npm run studio and reload'; s.className = 'status err'; } });</script>

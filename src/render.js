@@ -19,6 +19,8 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
   const theme = activeTheme();
   if (!themes[theme]) throw new Error(`unknown theme ${theme}`);
   const formats = (config.formats || ['1x1']).filter((f) => Page.FORMATS[f]);
+  const languages = (config.languages || []).filter((l) => l && l.code);
+  const langFormats = (config.languageFormats || ['1x1']).filter((f) => Page.FORMATS[f]);
   if (!formats.includes('1x1')) formats.unshift('1x1'); // image_link is always square
   const limitArg = process.argv.indexOf('--limit');
   const limit = limitArg > -1 ? Number(process.argv[limitArg + 1]) : Infinity;
@@ -30,7 +32,7 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
   if (!products.length) throw new Error('no in-stock products: refusing to publish an empty feed');
 
   fs.mkdirSync(IMG_DIR, { recursive: true });
-  const manifest = { theme, formats, builtAt: new Date().toISOString(), products: {} };
+  const manifest = { theme, formats, languages: languages.map((l) => l.code), languageFormats: langFormats, builtAt: new Date().toISOString(), products: {} };
   const jobs = [];
   const used = {};
   for (const p of products) {
@@ -44,6 +46,15 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
         files[fmt] = file;
         if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: pageHtml(design, p, fmt, g.price), out: path.join(IMG_DIR, file) });
       }
+      // Language versions (Meta language feed), only in config.languageFormats to save space.
+      for (const lang of languages) {
+        for (const fmt of langFormats) {
+          const short = lang.code.split('_')[0];
+          const file = `${p.id}-${fmt}-${short}-${keyFor(design, p, fmt, g.price, lang.code)}.jpg`;
+          files[`${fmt}@${lang.code}`] = file;
+          if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: pageHtml(design, p, fmt, g.price, lang.code), out: path.join(IMG_DIR, file) });
+        }
+      }
       return { variants: g.variants, price: g.price, files };
     });
     manifest.products[p.id] = { theme: design, groups };
@@ -55,7 +66,7 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
   let removed = 0;
   for (const f of fs.readdirSync(IMG_DIR)) if (!keep.has(f)) { fs.unlinkSync(path.join(IMG_DIR, f)); removed++; }
 
-  console.log(`theme=${theme} designs=${JSON.stringify(used)} formats=${formats.join(',')} products=${products.length} to_render=${jobs.length} removed=${removed}`);
+  console.log(`theme=${theme} designs=${JSON.stringify(used)} formats=${formats.join(',')} languages=${languages.map((l) => l.code).join(',') || 'none'} products=${products.length} to_render=${jobs.length} removed=${removed}`);
   const browser = await launch();
   const { done, failed } = await renderAll(browser, jobs, { onProgress: (n) => n % 200 === 0 && console.log(`  ${n} processed`) });
   await browser.close();

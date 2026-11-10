@@ -2,7 +2,7 @@
 // using the same _tokens.js / _page.js as the nightly render.
 (() => {
   const $ = (s) => document.querySelector(s);
-  const state = { themes: {}, products: [], config: {}, name: '', tokens: null, saved: '', view: 'grid', fmt: '1x1', selected: null, show: 24, layerSel: null };
+  const state = { themes: {}, products: [], config: {}, name: '', tokens: null, saved: '', view: 'grid', fmt: '1x1', selected: null, show: 24, layerSel: null, lang: '' };
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
   // ---- editable fields -------------------------------------------------------------
@@ -413,8 +413,9 @@
     return { name, compiled: compiledCache[name] };
   }
 
+  const langOf = (c) => (state.lang ? GFHTokens.translate(c, (state.config.translations || {})[state.lang], state.config.freeDeliveryText) : c);
   function pageFor(p, editing, fmt) {
-    const compiled = designFor(p, editing).compiled;
+    const compiled = langOf(designFor(p, editing).compiled);
     return GFHPage.build(compiled, {
       ...GFHTokens.resolve(compiled, p),
       title: p.title,
@@ -522,7 +523,7 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
     try {
       const d = designFor(p, GFHTokens.compile(state.tokens));
       const tokens = d.name === state.name ? state.tokens : state.themes[d.name];
-      const url = URL.createObjectURL(await StudioBackend.render(tokens, state.selected, fmt, priceFor(p, d.compiled)));
+      const url = URL.createObjectURL(await StudioBackend.render(tokens, state.selected, fmt, priceFor(p, d.compiled), state.lang || null));
       $('#exact').innerHTML = `<img src="${url}" alt="Rendered frame" style="max-width:min(560px,100%)"><p class="hint">${GFHPage.FORMATS[fmt].label} JPEG, rendered by the same headless Chrome as the nightly job.</p>`;
     } catch (e) {
       $('#exact').innerHTML = `<p class="status err">${GFHPage.esc(e.message)}</p>`;
@@ -633,6 +634,44 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
     status(msg, 'ok');
   }
 
+  // ---- translations ------------------------------------------------------------------
+  function openTranslations() {
+    const langs = state.config.languages || [];
+    if (!langs.length) return alert('No languages in config.json (languages).');
+    const dicts = state.config.translations || {};
+    // texts of every saved theme + the one being edited + keys already translated
+    const keys = [];
+    const add = (s) => { s = String(s || '').trim(); if (s && !keys.includes(s)) keys.push(s); };
+    GFHTokens.texts(GFHTokens.compile(state.tokens), state.config.freeDeliveryText).forEach(add);
+    Object.values(state.themes).forEach((t) => GFHTokens.texts(GFHTokens.compile(t), state.config.freeDeliveryText).forEach(add));
+    Object.values(dicts).forEach((d) => Object.keys(d).forEach(add));
+    $('#trHead').innerHTML = `<tr><th align="left">Main text</th>${langs.map((l) => `<th align="left">${GFHPage.esc(l.name || l.code)}</th>`).join('')}</tr>`;
+    $('#trRows').innerHTML = keys.map((k) => `<tr data-key="${GFHPage.esc(k)}"><td>${GFHPage.esc(k)}</td>${langs.map((l) => `<td><input type="text" data-lang="${l.code}" value="${GFHPage.esc((dicts[l.code] || {})[k] || '')}" class="${(dicts[l.code] || {})[k] ? '' : 'missing'}"></td>`).join('')}</tr>`).join('');
+    const check = () => {
+      const msgs = [];
+      for (const l of langs) {
+        const vals = [...$('#trRows').querySelectorAll(`input[data-lang="${l.code}"]`)].filter((i) => i.value.trim() && i.closest('tr').dataset.key !== 'Offer price' && !/\{(was|pct)\}/.test(i.closest('tr').dataset.key));
+        GFHTokens.lint({ bandText: vals.map((i) => i.value).join(' | ') }).forEach((m) => msgs.push(`${l.name || l.code}: ${m}`));
+      }
+      $('#trWarn').innerHTML = msgs.map((m) => `<div class="warn">⚠ ${GFHPage.esc(m)}</div>`).join('');
+    };
+    $('#trRows').querySelectorAll('input').forEach((i) => (i.oninput = () => { i.classList.toggle('missing', !i.value.trim()); check(); }));
+    check();
+    $('#trDlg').showModal();
+  }
+
+  async function saveTranslations() {
+    const out = {};
+    for (const l of state.config.languages || []) out[l.code] = {};
+    $('#trRows').querySelectorAll('tr').forEach((tr) => tr.querySelectorAll('input').forEach((i) => { if (i.value.trim()) out[i.dataset.lang][tr.dataset.key] = i.value.trim(); }));
+    let msg;
+    try { msg = await StudioBackend.saveTranslations({ translations: out }); } catch (e) { return alert(e.message); }
+    state.config.translations = out;
+    $('#trDlg').close();
+    renderPreview();
+    status(msg, 'ok');
+  }
+
   // ---- segments ----------------------------------------------------------------------
   function openSegments() {
     const names = Object.keys(state.themes);
@@ -701,6 +740,7 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
   async function load(keep) {
     const s = await StudioBackend.load();
     Object.assign(state, { themes: s.themes, products: s.products, config: s.config });
+    $('#langSel').innerHTML = '<option value="">Main (English)</option>' + (s.config.languages || []).map((l) => `<option value="${l.code}" ${l.code === state.lang ? 'selected' : ''}>${GFHPage.esc(l.name || l.code)}</option>`).join('');
     for (const k of Object.keys(compiledCache)) delete compiledCache[k];
     $('#count').textContent = `${s.products.length} products`;
     if (s.products.length < 100 && StudioBackend.mode === 'local') $('#count').textContent += ' (sample — click Load full catalog)';
@@ -723,6 +763,10 @@ ${StudioBackend.canRender ? '<button id="exactBtn">Render exact JPEG</button>' :
   document.querySelectorAll('#fmtSeg button').forEach((b) => (b.onclick = () => setFmt(b.dataset.f)));
   $('#sampleDisc').onchange = renderPreview;
   $('#segView').onchange = renderPreview;
+  $('#langSel').onchange = (e) => { state.lang = e.target.value; renderPreview(); };
+  $('#trBtn').onclick = openTranslations;
+  $('#trCancel').onclick = () => $('#trDlg').close();
+  $('#trSave').onclick = saveTranslations;
   $('#segBtn').onclick = openSegments;
   $('#segCancel').onclick = () => $('#segDlg').close();
   $('#segSave').onclick = saveSegments;

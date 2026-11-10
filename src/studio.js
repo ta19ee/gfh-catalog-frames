@@ -54,14 +54,16 @@ function saveSchedule({ theme, schedule }) {
 
 // Exact JPEG through the same headless-Chrome path as the nightly render.
 let browserP = null;
-async function renderExact(tokens, productId, fmt = '1x1', price = null) {
+async function renderExact(tokens, productId, fmt = '1x1', price = null, lang = null) {
   const frame = require('./frame');
   const p = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'products.json'), 'utf8')).find((x) => x.id === productId);
   if (!p) throw new Error('Unknown product');
   if (!frame.Page.FORMATS[fmt]) throw new Error('Unknown format');
   const num = (v) => (v == null || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
   const pr = price ? { now: num(price.now), ref: num(price.ref), pct: num(price.pct) } : null;
-  const t = frame.Tokens.compile(tokens);
+  const cfg = readConfig();
+  let t = frame.Tokens.compile(tokens);
+  if (lang) t = frame.Tokens.translate(t, (cfg.translations || {})[lang], cfg.freeDeliveryText);
   const html = frame.Page.build(t, frame.frameOptions(t, p, pr, fmt), fmt);
   browserP = browserP || frame.launch();
   const out = path.join(ROOT, 'previews', 'studio-exact.jpg');
@@ -109,6 +111,18 @@ const server = http.createServer(async (req, res) => {
     const m = url.pathname.match(/^\/api\/themes\/([^/]+)$/);
     if (req.method === 'PUT' && m) { saveTheme(m[1], await body(req)); return send(res, 200, { ok: true }); }
     if (req.method === 'PUT' && url.pathname === '/api/schedule') { saveSchedule(await body(req)); return send(res, 200, { ok: true }); }
+    if (req.method === 'PUT' && url.pathname === '/api/translations') {
+      const { translations } = await body(req);
+      const cfg = readConfig();
+      const clean = {};
+      for (const l of cfg.languages || []) {
+        clean[l.code] = {};
+        for (const [k, v] of Object.entries((translations || {})[l.code] || {})) if (String(k).trim() && String(v).trim()) clean[l.code][String(k).trim()] = String(v).trim();
+      }
+      cfg.translations = clean;
+      fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2) + '\n');
+      return send(res, 200, { ok: true });
+    }
     if (req.method === 'PUT' && url.pathname === '/api/segments') { saveSegments(await body(req)); return send(res, 200, { ok: true }); }
     if (req.method === 'POST' && url.pathname === '/api/upload') {
       // { name, data: "data:image/png;base64,..." } -> assets/layers/<name>
@@ -130,8 +144,8 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, message: msg });
     }
     if (req.method === 'POST' && url.pathname === '/api/render') {
-      const { tokens, productId, fmt, price } = await body(req);
-      return send(res, 200, await renderExact(tokens, productId, fmt, price), 'image/jpeg');
+      const { tokens, productId, fmt, price, lang } = await body(req);
+      return send(res, 200, await renderExact(tokens, productId, fmt, price, lang || null), 'image/jpeg');
     }
     send(res, 404, { error: 'not found' });
   } catch (e) {

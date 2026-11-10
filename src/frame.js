@@ -76,9 +76,15 @@ function themeOf(themeName) {
   return t;
 }
 
-// price: { now, ref, pct } or null. fmt: '1x1' | '4x5' | '9x16' | '2x3'
-function pageHtml(themeName, p, fmt = '1x1', price = null) {
-  const t = themeOf(themeName);
+// The theme with its texts in one language (config.languages / config.translations); null = main.
+function localized(t, lang) {
+  if (!lang) return t;
+  return Tokens.translate(t, (config.translations || {})[lang], config.freeDeliveryText);
+}
+
+// price: { now, ref, pct } or null. fmt: '1x1' | '4x5' | '9x16' | '2x3'. lang: e.g. 'nl_XX' or null
+function pageHtml(themeName, p, fmt = '1x1', price = null, lang = null) {
+  const t = localized(themeOf(themeName), lang);
   return Page.build(t, frameOptions(t, p, price, fmt), fmt);
 }
 
@@ -100,8 +106,8 @@ function priceGroups(themeName, p, history = {}, today = new Date().toISOString(
 
 // Hash of the exact page that is rendered, so an image is re-rendered exactly when it would look
 // different (theme, layout code, photo, title, label, badge, price, format), and never otherwise.
-function keyFor(themeName, p, fmt = '1x1', price = null) {
-  return crypto.createHash('sha1').update(fmt + '|' + pageHtml(themeName, p, fmt, price)).digest('hex').slice(0, 12);
+function keyFor(themeName, p, fmt = '1x1', price = null, lang = null) {
+  return crypto.createHash('sha1').update(fmt + '|' + pageHtml(themeName, p, fmt, price, lang)).digest('hex').slice(0, 12);
 }
 
 async function launch() {
@@ -179,4 +185,4 @@ async function renderAll(browser, jobs, { concurrency = Number(process.env.CONCU
   return { done, failed };
 }
 
-module.exports = { themeFor, Page, Tokens, frameOptions, priceGroups, themeOf, facts, loadThemes, LOGO, photoUrl, themes, activeTheme, pageHtml, keyFor, launch, renderAll, ROOT };
+module.exports = { localized, themeFor, Page, Tokens, frameOptions, priceGroups, themeOf, facts, loadThemes, LOGO, photoUrl, themes, activeTheme, pageHtml, keyFor, launch, renderAll, ROOT };

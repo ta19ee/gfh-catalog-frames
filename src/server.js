@@ -126,11 +126,15 @@ let lastSlot = '';
 setInterval(() => {
   const d = new Date();
   const slot = d.toISOString().slice(0, 13);
-  if (d.getUTCMinutes() >= 30 && BUILD_HOURS.includes(d.getUTCHours()) && slot !== lastSlot) {
+  // The very first build (fresh volume, images still to copy from Pages) starts by hand.
+  const waitingForSeed = process.env.SEED_URL && !fs.existsSync(path.join(PUBLIC, 'manifest.json'));
+  if (!waitingForSeed && d.getUTCMinutes() >= 30 && BUILD_HOURS.includes(d.getUTCHours()) && slot !== lastSlot) {
     lastSlot = slot;
     rebuild('schedule');
   }
 }, 60e3);
+// From the server shell: fly ssh console -a gfh-catalog-frames -C "pkill -USR2 -f src/server.js"
+process.on('SIGUSR2', () => rebuild('shell'));
 
 // ---- GitHub backup of Studio changes (optional) ----------------------------------------------
 // Pushes changed config.json, theme files and layer images to the repo, so it stays a copy.

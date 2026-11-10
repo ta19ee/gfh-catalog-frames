@@ -73,7 +73,7 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
   <section class="stage">
     <div class="toolbar">
       <div class="seg" id="viewSeg"><button data-v="grid" class="on">Grid</button><button data-v="single">Single</button></div>
-      <input type="text" id="search" placeholder="Search products (title or type)…">
+      <input type="text" id="search" placeholder="Search title, type, vendor or tag…">
       <label><input type="checkbox" id="stockOnly" checked> In stock only</label>
       <span class="spacer"></span>
       <span class="hint" id="liveInfo"></span>
@@ -92,6 +92,7 @@ dialog::backdrop{background:rgba(0,0,0,.3)}
   <p style="display:flex;gap:8px;justify-content:flex-end"><button id="schedCancel">Cancel</button><button id="schedSave" class="primary">Save schedule</button></p>
 </dialog>
 
+<script>window.addEventListener('error', function (e) { var s = document.getElementById('status'); if (s) { s.textContent = 'Studio error: ' + e.message + ' — restart npm run studio and reload'; s.className = 'status err'; } });</script>
 <script src="lib/_tokens.js"></script>
 <script src="lib/_page.js"></script>
 <script src="backend.js"></script>

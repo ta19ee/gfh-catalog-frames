@@ -387,9 +387,10 @@ ${StudioBackend.canRender ? '<p><button id="exactBtn">Render exact JPEG</button>
   $('#stockOnly').onchange = renderPreview;
   document.querySelectorAll('#viewSeg button').forEach((b) => (b.onclick = () => setView(b.dataset.v)));
   window.addEventListener('beforeunload', (e) => { if (state.tokens && JSON.stringify(state.tokens) !== state.saved) e.preventDefault(); });
+  window.addEventListener('error', (e) => status('Studio error: ' + e.message + ' (reload the page; if it persists, restart npm run studio)', 'err'));
   if (StudioBackend.mode === 'hosted') {
     document.title = 'Frame Studio (hosted)';
     $('#saveBtn').textContent = 'Propose change (PR)';
   }
-  load();
+  load().catch((e) => status('Could not load themes/products: ' + e.message, 'err'));
 })();

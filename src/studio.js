@@ -62,14 +62,16 @@ async function renderExact(tokens, productId) {
   return fs.readFileSync(out);
 }
 
-const STATIC = {
-  '/': [path.join(ROOT, 'studio', 'index.html'), 'text/html; charset=utf-8'],
-  '/studio.js': [path.join(ROOT, 'studio', 'studio.js'), 'text/javascript; charset=utf-8'],
-  '/backend.js': [path.join(ROOT, 'studio', 'backend.js'), 'text/javascript; charset=utf-8'],
-  '/lib/_page.js': [path.join(THEME_DIR, '_page.js'), 'text/javascript; charset=utf-8'],
-  '/lib/_tokens.js': [path.join(THEME_DIR, '_tokens.js'), 'text/javascript; charset=utf-8'],
-  '/logo.png': [path.join(ROOT, 'assets', 'gfh-logo.png'), 'image/png'],
-};
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png' };
+// Everything in studio/ is served as is; lib/ and logo.png come from the shared modules and assets.
+function staticFile(pathname) {
+  if (pathname === '/') pathname = '/index.html';
+  if (pathname === '/logo.png') return path.join(ROOT, 'assets', 'gfh-logo.png');
+  if (pathname === '/lib/_tokens.js' || pathname === '/lib/_page.js') return path.join(THEME_DIR, pathname.slice(5));
+  const dir = path.join(ROOT, 'studio');
+  const file = path.resolve(dir, '.' + pathname);
+  return file.startsWith(dir + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile() ? file : null;
+}
 
 function body(req) {
   return new Promise((resolve, reject) => {
@@ -89,10 +91,8 @@ const server = http.createServer(async (req, res) => {
   try {
     // Only accept same-origin writes (blocks other websites from posting to this local server).
     if (req.method !== 'GET' && req.headers.origin && req.headers.origin !== `http://localhost:${PORT}` && req.headers.origin !== `http://127.0.0.1:${PORT}`) return send(res, 403, { error: 'forbidden' });
-    if (req.method === 'GET' && STATIC[url.pathname]) {
-      const [file, type] = STATIC[url.pathname];
-      return send(res, 200, fs.readFileSync(file), type);
-    }
+    const file = req.method === 'GET' && !url.pathname.startsWith('/api/') && staticFile(decodeURIComponent(url.pathname));
+    if (file) return send(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || 'application/octet-stream');
     if (req.method === 'GET' && url.pathname === '/api/state') {
       return send(res, 200, data.state());
     }
@@ -109,6 +109,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') console.error(`Port ${PORT} is already in use: Frame Studio may already be running. Open http://localhost:${PORT}, or stop the other one and try again.`);
+  else console.error(e);
+  process.exit(1);
+});
 server.listen(PORT, '127.0.0.1', () => {
   const link = `http://localhost:${PORT}`;
   console.log(`Frame Studio running at ${link}  (Ctrl+C to stop)`);

@@ -94,7 +94,37 @@ async function launch() {
   return puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox', '--hide-scrollbars'] });
 }
 
-// jobs: [{ html, out }]. Returns { done, failed: [{ job, error }] }.
+// Each product photo is downloaded once and reused for all its formats (one CDN request per
+// product instead of one per image). Small LRU so memory stays low.
+const photoCache = new Map();
+async function photoData(url) {
+  if (photoCache.has(url)) {
+    const v = photoCache.get(url);
+    photoCache.delete(url);
+    photoCache.set(url, v); // most recently used
+    return v;
+  }
+  const p = (async () => {
+    const r = await fetch(url, { headers: { 'User-Agent': 'GFH-catalog-frames/1.0' } });
+    if (!r.ok) throw new Error(`photo ${r.status}`);
+    const type = r.headers.get('content-type') || 'image/jpeg';
+    return `data:${type};base64,${Buffer.from(await r.arrayBuffer()).toString('base64')}`;
+  })();
+  photoCache.set(url, p);
+  p.catch(() => photoCache.delete(url));
+  while (photoCache.size > 40) photoCache.delete(photoCache.keys().next().value);
+  return p;
+}
+
+// Swap the photo URL in the page for the downloaded copy.
+async function inlinePhoto(html) {
+  const m = html.match(/<div class="plate"><img src="([^"]+)"/);
+  if (!m || m[1].startsWith('data:')) return html;
+  const url = m[1].replace(/&amp;/g, '&');
+  return html.replace(m[0], `<div class="plate"><img src="${await photoData(url)}"`);
+}
+
+// jobs: [{ html, out, fmt }]. Returns { done, failed: [{ job, error }] }.
 async function renderAll(browser, jobs, { concurrency = Number(process.env.CONCURRENCY) || config.concurrency, onProgress } = {}) {
   const queue = [...jobs];
   let done = 0;
@@ -109,7 +139,7 @@ async function renderAll(browser, jobs, { concurrency = Number(process.env.CONCU
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           if (attempt) await new Promise((r) => setTimeout(r, 3000 * attempt)); // CDN throttling: back off
-          await page.setContent(job.html, { waitUntil: 'load', timeout: 45000 });
+          await page.setContent(await inlinePhoto(job.html), { waitUntil: 'load', timeout: 45000 });
           await page.evaluate(async () => {
             await document.fonts.ready;
             await Promise.all([...document.images].map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))));

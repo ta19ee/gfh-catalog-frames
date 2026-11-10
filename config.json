@@ -1,0 +1,23 @@
+{
+  "theme": "autumn",
+  "shopDomain": "mydukaan-nl.myshopify.com",
+  "storefront": "https://globalfoodhub.com",
+  "siteUrl": "https://ta19ee.github.io/gfh-catalog-frames",
+  "size": 1080,
+  "concurrency": 4,
+  "freeDeliveryText": "Free delivery over €29",
+  "maxTitleChars": 70,
+  "schedule": [
+    {
+      "theme": "blackweek",
+      "from": "2026-11-27",
+      "to": "2026-12-01"
+    },
+    {
+      "theme": "winter",
+      "from": "2026-12-02",
+      "to": "2027-02-28"
+    }
+  ],
+  "repo": "ta19ee/gfh-catalog-frames"
+}

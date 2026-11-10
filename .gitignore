@@ -1,0 +1,7 @@
+node_modules/
+data/
+public/
+previews/
+preview_*.jpg
+.env
+.claude/

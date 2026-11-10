@@ -1,0 +1,22 @@
+{
+  "name": "gfh-catalog-frames",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Designs a branded frame for every product in the GlobalFoodHub catalog and publishes a Meta supplementary feed (replaces Confect).",
+  "scripts": {
+    "fetch": "node src/fetch.js",
+    "render": "node src/render.js",
+    "feed": "node src/feed.js",
+    "build": "node src/fetch.js && node src/render.js && node src/feed.js && node src/site.js",
+    "preview": "node src/preview.js",
+    "test": "node --test test/titles.test.js test/themes.test.js",
+    "studio": "node src/studio.js",
+    "site": "node src/site.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

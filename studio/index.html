@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frame Studio</title>
+<link rel="icon" href="logo.png">
+<style>
+:root{--bg:#F4F6FA;--panel:#FFFFFF;--line:#E2E6EE;--text:#1B2333;--muted:#667085;--accent:#142C73;--accent-2:#F39200;--warn-bg:#FFF4E5;--warn:#8A4B00;--ok:#127A3A}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:grid;grid-template-rows:auto 1fr}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header img{width:32px;height:32px}
+header h1{font-size:16px;margin:0 12px 0 0}
+select,input,textarea,button{font:inherit;color:inherit}
+select,input[type=text],input[type=date],textarea{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff}
+button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+.spacer{flex:1}
+.status{font-size:13px;color:var(--muted)}
+.status.ok{color:var(--ok)}
+.status.err{color:#B42318}
+main{display:grid;grid-template-columns:360px 1fr;min-height:0}
+aside{overflow-x:hidden;background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:8px 16px 40px}
+details{border-bottom:1px solid var(--line);padding:8px 0}
+summary{font-weight:600;cursor:pointer;padding:4px 0}
+.row{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:8px;margin:8px 0}
+.row>*{min-width:0}
+.row label{color:var(--muted);font-size:13px}
+.color{display:flex;gap:6px;align-items:center}
+.color input[type=color]{width:34px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff}
+.color input[type=text]{flex:1;min-width:0}
+.list .color{margin-bottom:6px}
+.mini{padding:2px 8px;font-size:12px}
+input[type=range]{width:100%}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:8px 10px;margin:8px 0;font-size:13px}
+section.stage{overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toolbar input[type=text]{width:260px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0}
+.seg button.on{background:var(--accent);color:#fff}
+.frame{position:relative;background:#ddd;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.frame iframe{position:absolute;left:0;top:0;width:1080px;height:1080px;border:0;transform-origin:0 0;pointer-events:none}
+.card .cap{color:var(--muted);font-size:12px;padding:4px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.single{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.single>div:first-child{flex:1 1 420px;max-width:560px}.single>div:last-child{flex:1 1 260px;min-width:0}
+.exact img{width:100%;max-width:560px;border-radius:8px;display:block}
+.hint{color:var(--muted);font-size:13px}
+.sched td{padding:4px}
+.sched input[type=date]{width:140px}
+dialog{border:1px solid var(--line);border-radius:12px;padding:20px;max-width:640px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.3)}
+@media (max-width:900px){main{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:50vh}}
+</style>
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="">
+  <h1>Frame Studio</h1>
+  <label>Theme <select id="themeSel"></select></label>
+  <button id="dupBtn" title="Copy this theme under a new name">Duplicate…</button>
+  <button id="schedBtn">Schedule…</button>
+  <span class="spacer"></span>
+  <span id="status" class="status"></span>
+  <button id="revertBtn">Revert</button>
+  <button id="saveBtn" class="primary">Save theme</button>
+</header>
+<main>
+  <aside id="controls"></aside>
+  <section class="stage">
+    <div class="toolbar">
+      <div class="seg" id="viewSeg"><button data-v="grid" class="on">Grid</button><button data-v="single">Single</button></div>
+      <input type="text" id="search" placeholder="Search products (title or type)…">
+      <label><input type="checkbox" id="stockOnly" checked> In stock only</label>
+      <span class="spacer"></span>
+      <span class="hint" id="liveInfo"></span>
+    </div>
+    <div id="warnings"></div>
+    <div id="view"></div>
+  </section>
+</main>
+
+<dialog id="schedDlg">
+  <h3 style="margin-top:0">Which theme is live when</h3>
+  <p class="hint">The nightly job uses the first date range that contains today, otherwise the default theme. Saving writes <code>config.json</code> (local) or opens a pull request (hosted).</p>
+  <div class="row"><label>Default theme</label><select id="defTheme"></select></div>
+  <table class="sched"><thead><tr><th align="left">Theme</th><th align="left">From</th><th align="left">To</th><th></th></tr></thead><tbody id="schedRows"></tbody></table>
+  <p><button id="addRange" class="mini">+ Add date range</button></p>
+  <p style="display:flex;gap:8px;justify-content:flex-end"><button id="schedCancel">Cancel</button><button id="schedSave" class="primary">Save schedule</button></p>
+</dialog>
+
+<script src="lib/_tokens.js"></script>
+<script src="lib/_page.js"></script>
+<script src="backend.js"></script>
+<script src="studio.js"></script>
+</body>
+</html>

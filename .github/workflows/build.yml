@@ -1,0 +1,83 @@
+name: Build catalog frames
+
+on:
+  schedule:
+    - cron: '30 3 * * *' # daily 03:30 UTC, before Meta's daily feed fetch
+  push:
+    branches: [main]
+    paths: ['src/**', 'studio/**', 'config.json', 'assets/**']
+  workflow_dispatch:
+    inputs:
+      theme:
+        description: 'Force a theme (blank = use config.json schedule)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Restore rendered images
+        uses: actions/cache@v4
+        with:
+          path: public/img
+          key: frames-${{ github.run_id }}
+          restore-keys: frames-
+
+      - run: npm test
+
+      - name: Fetch products (Shopify Admin API)
+        run: node src/fetch.js
+        env:
+          SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
+
+      - name: Render frames
+        run: node src/render.js
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+          THEME: ${{ inputs.theme }}
+
+      - name: Build feed
+        run: node src/feed.js
+
+      - name: Publish hosted Studio
+        run: node src/site.js
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

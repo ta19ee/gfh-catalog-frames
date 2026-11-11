@@ -113,7 +113,8 @@ function keyFor(themeName, p, fmt = '1x1', price = null, lang = null) {
 async function launch() {
   const puppeteer = require('puppeteer-core');
   const executablePath = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-  return puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox', '--hide-scrollbars'] });
+  // A stuck call fails after 60s (and is retried) instead of Puppeteer's default 180s.
+  return puppeteer.launch({ executablePath, headless: true, protocolTimeout: 60000, args: ['--no-sandbox', '--hide-scrollbars'] });
 }
 
 // Each product photo is downloaded once and reused for all its formats (one CDN request per
@@ -146,22 +147,46 @@ async function inlinePhoto(html) {
   return html.replace(m[0], `<div class="plate"><img src="${await photoData(url)}"`);
 }
 
-// jobs: [{ html, out, fmt }]. Returns { done, failed: [{ job, error }] }.
+// jobs: [{ html, out, fmt }]; html may be a function (built when rendered, saves memory). Returns { done, failed: [{ job, error }] }.
 async function renderAll(browser, jobs, { concurrency = Number(process.env.CONCURRENCY) || config.concurrency, onProgress } = {}) {
   const queue = [...jobs];
   let done = 0;
   const failed = [];
-  const worker = async () => {
-    const page = await browser.newPage();
+  // One Chromium per worker: with many tabs in one headless Chromium, screenshots of the
+  // background tabs stall until the protocol timeout (seen on Fly: one image per ~3 minutes).
+  // Worker 0 uses the browser passed in (the Studio keeps one open); the others own theirs and
+  // restart it every RECYCLE images or when it crashed. Each image gets a new tab: reusing one
+  // tab grew the renderer by several MB per image (~700 MB after 100, out of memory on Fly).
+  const RECYCLE = 150;
+  const worker = async (i) => {
+    let own = null;
+    let page = null;
+    let count = 0;
+    const fresh = async () => {
+      if (page) await page.close().catch(() => {});
+      if (i > 0) {
+        if (own) await own.close().catch(() => {});
+        own = await launch();
+      }
+      page = await (own || browser).newPage();
+      count = 0;
+    };
+    await fresh();
     while (queue.length) {
       const job = queue.shift();
       const f = Page.FORMATS[job.fmt || '1x1'];
-      await page.setViewport({ width: f.w, height: f.h, deviceScaleFactor: 1 });
+      if (i > 0 && ++count > RECYCLE) await fresh();
+      else {
+        await page.close().catch(() => {});
+        page = await (own || browser).newPage().catch(() => page);
+      }
       let error = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           if (attempt) await new Promise((r) => setTimeout(r, 3000 * attempt)); // CDN throttling: back off
-          await page.setContent(await inlinePhoto(job.html), { waitUntil: 'load', timeout: 45000 });
+          if (attempt && (i > 0 || page.isClosed())) await fresh(); // may have crashed (e.g. out of memory)
+          await page.setViewport({ width: f.w, height: f.h, deviceScaleFactor: 1 });
+          await page.setContent(await inlinePhoto(typeof job.html === 'function' ? job.html() : job.html), { waitUntil: 'load', timeout: 45000 });
           await page.evaluate(async () => {
             await document.fonts.ready;
             await Promise.all([...document.images].map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))));
@@ -179,9 +204,10 @@ async function renderAll(browser, jobs, { concurrency = Number(process.env.CONCU
       else done++;
       if (onProgress) onProgress(done + failed.length);
     }
-    await page.close();
+    await page.close().catch(() => {});
+    if (own) await own.close().catch(() => {});
   };
-  await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length || 1) }, worker));
+  await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length || 1) }, (_, i) => worker(i)));
   return { done, failed };
 }
 

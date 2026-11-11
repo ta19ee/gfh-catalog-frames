@@ -44,7 +44,7 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
       for (const fmt of formats) {
         const file = `${p.id}-${fmt}-${keyFor(design, p, fmt, g.price)}.jpg`;
         files[fmt] = file;
-        if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: pageHtml(design, p, fmt, g.price), out: path.join(IMG_DIR, file) });
+        if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: () => pageHtml(design, p, fmt, g.price), out: path.join(IMG_DIR, file) });
       }
       // Language versions (Meta language feed), only in config.languageFormats to save space.
       for (const lang of languages) {
@@ -52,7 +52,7 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
           const short = lang.code.split('_')[0];
           const file = `${p.id}-${fmt}-${short}-${keyFor(design, p, fmt, g.price, lang.code)}.jpg`;
           files[`${fmt}@${lang.code}`] = file;
-          if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: pageHtml(design, p, fmt, g.price, lang.code), out: path.join(IMG_DIR, file) });
+          if (!fs.existsSync(path.join(IMG_DIR, file))) jobs.push({ id: p.id, title: p.title, fmt, html: () => pageHtml(design, p, fmt, g.price, lang.code), out: path.join(IMG_DIR, file) });
         }
       }
       return { variants: g.variants, price: g.price, files };

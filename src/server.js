@@ -133,7 +133,7 @@ setInterval(() => {
     rebuild('schedule');
   }
 }, 60e3);
-// From the server shell: fly ssh console -a gfh-catalog-frames -C "pkill -USR2 -f src/server.js"
+// From the server shell: fly ssh console -a gfh-catalog-frames -C "pkill -USR2 -f '^node src/server.js'"
 process.on('SIGUSR2', () => rebuild('shell'));
 
 // ---- GitHub backup of Studio changes (optional) ----------------------------------------------

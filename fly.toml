@@ -9,7 +9,7 @@ primary_region = "ams"
 [env]
   PUBLIC_URL = "https://gfh-catalog-frames.fly.dev"
   BUILD_HOURS = "0,6,12,18"      # rebuild at these UTC hours, at :30
-  CONCURRENCY = "3"              # browser tabs while rendering
+  CONCURRENCY = "3"              # browsers while rendering (each its own Chromium, ~250 MB)
   SEED_URL = "https://ta19ee.github.io/gfh-catalog-frames"  # first build copies what Pages already rendered
 
 [http_service]
@@ -26,7 +26,7 @@ primary_region = "ams"
     grace_period = "20s"
 
 [[vm]]
-  size = "shared-cpu-2x"
+  size = "shared-cpu-2x"    # a full re-render (theme switch) takes ~1-2 h here; scale up for faster
   memory = "2gb"
 
 # Images, feeds, settings and themes:  fly volumes create gfh_frames_data --size 5 --region ams

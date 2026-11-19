@@ -26,7 +26,8 @@ primary_region = "ams"
     grace_period = "20s"
 
 [[vm]]
-  size = "shared-cpu-2x"    # a full re-render (theme switch) takes ~1-2 h here; scale up for faster
+  size = "shared-cpu-2x"    # normal size; for a full re-render (theme switch) the app resizes itself
+                            # to performance-4x 8 GB and back (src/scale.js, needs FLY_API_TOKEN)
   memory = "2gb"
 
 # Images, feeds, settings and themes:  fly volumes create gfh_frames_data --size 5 --region ams
@@ -39,3 +40,5 @@ primary_region = "ams"
 #   SESSION_SECRET       signs the login cookie
 #   SHOPIFY_ADMIN_TOKEN  optional, read_products: exact prices, collections and categories
 #   GITHUB_TOKEN         optional, contents read/write on ta19ee/gfh-catalog-frames: backs up Studio changes
+#   FLY_API_TOKEN        optional, deploy token for this app: big rebuilds scale the machine up and back
+#                        (fly tokens create deploy -a gfh-catalog-frames)

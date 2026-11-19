@@ -4,7 +4,8 @@
 // Images are cached by theme + design + format + photo + title + label + price, so a run only
 // re-renders new or changed products. Switching theme re-renders everything.
 // Also updates public/price-history.json (our own 30-day price history, see prices.js).
-// Usage: node src/render.js [--limit N]      (THEME=winter overrides the schedule)
+// Usage: node src/render.js [--limit N] [--count]   (THEME=winter overrides the schedule;
+//        --count only prints how many images would be rendered)
 const fs = require('fs');
 const path = require('path');
 const config = require('../config.json');
@@ -62,6 +63,7 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
   manifest.designs = used;
 
   console.log(`theme=${theme} designs=${JSON.stringify(used)} formats=${formats.join(',')} languages=${languages.map((l) => l.code).join(',') || 'none'} products=${products.length} to_render=${jobs.length}`);
+  if (process.argv.includes('--count')) return; // only count (server.js decides whether to scale up first)
   const browser = await launch();
   const { done, failed } = await renderAll(browser, jobs, { onProgress: (n) => n % 200 === 0 && console.log(`  ${n} processed`) });
   await browser.close();

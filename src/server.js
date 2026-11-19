@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const studio = require('./studio');
 const data = require('./studio-data');
+const scale = require('./scale');
 
 const { ROOT } = data;
 const PORT = Number(process.env.PORT) || 8080;
@@ -92,9 +93,9 @@ function servePublic(req, res, pathname) {
 // ---- rebuild (fetch → render → feed) ---------------------------------------------------------
 const build = { running: false, step: '', startedAt: null, finishedAt: null, ok: null, reason: '', lines: [] };
 const STEPS = [['Fetching products', 'src/fetch.js'], ['Rendering images', 'src/render.js'], ['Writing feeds', 'src/feed.js']];
-function runStep(script) {
+function runStep(script, args = []) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [script], { cwd: ROOT, env: process.env });
+    const child = spawn(process.execPath, [script, ...args], { cwd: ROOT, env: process.env });
     const keep = (chunk) => String(chunk).split('\n').filter(Boolean).forEach((l) => {
       build.lines.push(l);
       if (build.lines.length > 200) build.lines.shift();
@@ -115,11 +116,47 @@ async function rebuild(reason) {
   if (process.env.SEED_URL && !fs.existsSync(path.join(PUBLIC, 'manifest.json'))) steps.unshift(['Copying images from GitHub Pages', 'src/seed.js']);
   for (const [label, script] of steps) {
     build.step = label;
+    if (script === 'src/render.js' && (await scaledUpFor(reason))) {
+      // The machine restarts big and continues. If Fly has not restarted it within 10 minutes, give up.
+      setTimeout(() => {
+        log('resize did not restart the machine: the next scheduled rebuild tries again');
+        scale.writeState(null);
+        Object.assign(build, { running: false, step: '', finishedAt: new Date().toISOString(), ok: false });
+      }, 10 * 6e4).unref();
+      return true;
+    }
     if (!(await runStep(script))) { ok = false; build.lines.push(`${label} failed: the previous feed stays live`); break; }
   }
   Object.assign(build, { running: false, step: '', finishedAt: new Date().toISOString(), ok });
   log(`rebuild ${ok ? 'finished' : 'failed'}`);
+  // Done on the big machine: back to the normal size (restarts the machine once more).
+  if (scale.enabled() && scale.isBig() && (scale.readState() || {}).phase === 'up') {
+    log('resizing back to the normal machine');
+    scale.scaleDown().catch((e) => log('resize back failed:', e.message));
+  }
   return true;
+}
+// Many images to render (e.g. a theme switch) on the small machine: resize to the big one first.
+// Returns true when the resize was started (Fly then restarts this process).
+async function scaledUpFor(reason) {
+  if (!scale.enabled() || scale.isBig()) return false;
+  build.step = 'Counting images to render';
+  if (!(await runStep('src/render.js', ['--count']))) return false;
+  const m = [...build.lines].reverse().join('\n').match(/to_render=(\d+)/);
+  const toRender = m ? Number(m[1]) : 0;
+  if (!scale.shouldScaleUp(toRender, { big: false })) return false;
+  build.step = `Scaling up the server for ${toRender} images (it restarts, then continues)`;
+  log(`${toRender} images to render: resizing to ${scale.BIG.guest.cpu_kind}-${scale.BIG.guest.cpus}x ${scale.BIG.guest.memory_mb} MB`);
+  try {
+    await scale.scaleUp(`${reason}, ${toRender} images`);
+    build.lines.push('Scaling up: the server restarts in a few seconds and continues the rebuild');
+    return true;
+  } catch (e) {
+    log('scale up failed, rendering on this machine:', e.message);
+    build.lines.push(`Scale up failed (${e.message}); rendering on the normal machine`);
+    build.step = 'Rendering images';
+    return false;
+  }
 }
 // Every BUILD_HOURS (UTC) at :30.
 let lastSlot = '';
@@ -241,4 +278,18 @@ server.listen(PORT, '0.0.0.0', () => {
   log(`catalog frames on :${PORT} (${PUBLIC_URL}); rebuilds at ${BUILD_HOURS.map((h) => `${h}:30`).join(', ')} UTC${PASSWORD ? '' : '; STUDIO_PASSWORD not set: Studio locked'}`);
   // No catalog yet (fresh volume): fetch one so the Studio has products.
   if (!fs.existsSync(path.join(ROOT, 'data', 'products.json'))) runStep('src/fetch.js');
+  // After an automatic resize (see scale.js): continue the rebuild, or go back to the normal size.
+  const state = scale.readState();
+  const action = scale.bootAction(state, { big: scale.isBig() });
+  if (action === 'rebuild') {
+    scale.writeState({ ...state, starts: (state.starts || 0) + 1 });
+    log(`running on the big machine: continuing the rebuild (${state.reason})`);
+    rebuild(`scaled up: ${state.reason}`);
+  } else if (action === 'down') {
+    log('still on the big machine without a rebuild to do: resizing back');
+    scale.scaleDown().catch((e) => log('resize back failed:', e.message));
+  } else if (action === 'clear') {
+    log(`back on the normal machine${state.phase === 'down' ? ' after the scaled-up rebuild' : ''}`);
+    scale.writeState(null);
+  }
 });

@@ -1,6 +1,6 @@
 // Writes the Meta supplementary feeds (rows matched on id = Shopify variant ID):
 //   feed.csv        id,image_link                     (square image only; the safe default)
-//   feed-multi.csv  id,image_link + tagged 4:5 / 9:16 images for placement-aware catalog ads
+//   feed-multi.csv  id,image_link, the square again as image[0] + tagged 4:5 / 9:16 images
 //                   (Meta image tags ASPECT_RATIO_4_5_PREFERRED / ASPECT_RATIO_9_16_PREFERRED).
 //                   Test it on a small product set in Commerce Manager before switching to it.
 const fs = require('fs');
@@ -14,8 +14,11 @@ const url = (file) => `${config.siteUrl}/img/${file}`;
 const extra = (manifest.formats || []).filter((f) => FORMATS[f] && FORMATS[f].metaTag);
 
 const simple = ['id,image_link'];
-const multiHead = ['id', 'image_link'];
-extra.forEach((f, i) => multiHead.push(`image[${i}].url`, `image[${i}].tag[0]`));
+// image[0] is Meta's main image: it wins over image_link. It must be the square frame, or Meta
+// has no framed square and falls back to the plain Shopify photo where it wants 1:1 (Reels
+// catalog cards). The tagged 4:5 / 9:16 images follow as image[1], image[2].
+const multiHead = ['id', 'image_link', 'image[0].url'];
+extra.forEach((f, i) => multiHead.push(`image[${i + 1}].url`, `image[${i + 1}].tag[0]`));
 const multi = [multiHead.join(',')];
 let products = 0;
 for (const { groups } of Object.values(manifest.products)) {
@@ -23,7 +26,7 @@ for (const { groups } of Object.values(manifest.products)) {
   for (const g of groups) {
     for (const v of g.variants) {
       simple.push(`${v},${url(g.files['1x1'])}`);
-      multi.push([v, url(g.files['1x1']), ...extra.flatMap((f) => [url(g.files[f]), FORMATS[f].metaTag])].join(','));
+      multi.push([v, url(g.files['1x1']), url(g.files['1x1']), ...extra.flatMap((f) => [url(g.files[f]), FORMATS[f].metaTag])].join(','));
     }
   }
 }

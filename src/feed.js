@@ -45,6 +45,27 @@ for (const { groups } of Object.values(manifest.products)) {
 }
 fs.writeFileSync(path.join(ROOT, 'public', 'feed-languages.csv'), langRows.join('\n') + '\n');
 
+// Meta "language and country" feed. Shopify sends Meta a localized version of every product per
+// language and country, each with the plain Shopify photo, and Meta shows that version (not the
+// default one the feeds above change) to everyone who matches. This feed puts the frames on those
+// versions too: one row per variant and locale, Dutch/German rows with the localized square.
+const LOCALES = config.localeOverrides || [
+  'nl_XX|AT', 'nl_XX|BE', 'nl_XX|DK', 'nl_XX|FR', 'nl_XX|NL',
+  'en_XX|AT', 'en_XX|BE', 'en_XX|DK', 'en_XX|FR', 'en_XX|DE',
+  'de_XX|AT', 'de_XX|BE', 'de_XX|DK', 'de_XX|FR', 'de_XX|DE', 'de_XX|NL',
+];
+const localeHead = ['id', 'override', 'image[0].url'];
+extra.forEach((f, i) => localeHead.push(`image[${i + 1}].url`, `image[${i + 1}].tag[0]`));
+const localeRows = [localeHead.join(',')];
+for (const { groups } of Object.values(manifest.products)) {
+  for (const g of groups) for (const loc of LOCALES) {
+    const square = g.files[`1x1@${loc.split('|')[0]}`] || g.files['1x1'];
+    const rest = extra.flatMap((f) => [url(g.files[f]), FORMATS[f].metaTag]);
+    for (const v of g.variants) localeRows.push([v, loc, url(square), ...rest].join(','));
+  }
+}
+fs.writeFileSync(path.join(ROOT, 'public', 'feed-locales.csv'), localeRows.join('\n') + '\n');
+
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const sample = Object.values(manifest.products).slice(0, 24).map((m) => `<img src="img/${m.groups[0].files['1x1']}" width="180" height="180" loading="lazy">`).join('');
 const formatsRow = Object.values(manifest.products).slice(0, 1).flatMap((m) => Object.entries(m.groups[0].files).map(([f, file]) => `<figure style="margin:0"><img src="img/${file}" height="240" loading="lazy"><figcaption>${f.includes('@') ? FORMATS[f.split('@')[0]].label + ' · ' + f.split('@')[1] : FORMATS[f].label}</figcaption></figure>`)).join('');

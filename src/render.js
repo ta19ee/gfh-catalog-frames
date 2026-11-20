@@ -1,4 +1,4 @@
-// Renders the framed JPEGs for every in-stock product into public/img/:
+// Renders the framed JPEGs for every active product (in stock or not) into public/img/:
 // one per format in config.formats (1x1, 4x5, 9x16, 2x3) and per price group (only when the
 // theme shows prices and a product's variants differ in price).
 // Images are cached by theme + design + format + photo + title + label + price, so a run only
@@ -29,8 +29,13 @@ const HISTORY = path.join(ROOT, 'public', 'price-history.json');
 
   const all = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'products.json'), 'utf8'));
   const history = prices.record(await prices.load(`${config.siteUrl}/price-history.json`, HISTORY), all.flatMap((p) => p.variants), today);
-  const products = all.filter((p) => p.variants.some((v) => v.available)).slice(0, limit);
-  if (!products.length) throw new Error('no in-stock products: refusing to publish an empty feed');
+  // Out-of-stock products are framed too. Meta keeps the last images a supplementary feed gave a
+  // product, and they cannot be edited any other way, so a product left out of the feed keeps
+  // stale ones (old Confect images, a past season's frame) for as long as it is out of stock.
+  // "includeOutOfStock": false in config.json goes back to in-stock products only.
+  const inStock = (p) => p.variants.some((v) => v.available);
+  if (!all.some(inStock)) throw new Error('no in-stock products: refusing to publish an empty feed');
+  const products = (config.includeOutOfStock === false ? all.filter(inStock) : all).slice(0, limit);
 
   fs.mkdirSync(IMG_DIR, { recursive: true });
   const manifest = { theme, formats, languages: languages.map((l) => l.code), languageFormats: langFormats, builtAt: new Date().toISOString(), products: {} };

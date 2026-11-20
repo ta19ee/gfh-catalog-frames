@@ -1,6 +1,6 @@
 # GFH catalog frames
 
-Puts a seasonal GlobalFoodHub frame around every in-stock product photo and publishes a
+Puts a seasonal GlobalFoodHub frame around every active product photo (in stock or not) and publishes a
 Meta **supplementary feed** (`feed.csv`: `id,image_link`, one row per Shopify variant id) so
 catalog and dynamic ads show the framed images. It replaces Confect.
 

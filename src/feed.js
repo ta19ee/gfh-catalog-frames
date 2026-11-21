@@ -61,7 +61,10 @@ for (const { groups } of Object.values(manifest.products)) {
   for (const g of groups) for (const loc of LOCALES) {
     const square = g.files[`1x1@${loc.split('|')[0]}`] || g.files['1x1'];
     const rest = extra.flatMap((f) => [url(g.files[f]), FORMATS[f].metaTag]);
-    for (const v of g.variants) localeRows.push([v, loc, url(square), ...rest].join(','));
+    // Meta rejects "de_XX" in a language-and-country override ("Override value isn't supported"):
+    // German is de_DE there. Our own image keys keep the config code (1x1@de_XX).
+    const override = loc.replace(/^de_XX\|/, 'de_DE|');
+    for (const v of g.variants) localeRows.push([v, override, url(square), ...rest].join(','));
   }
 }
 fs.writeFileSync(path.join(ROOT, 'public', 'feed-locales.csv'), localeRows.join('\n') + '\n');
